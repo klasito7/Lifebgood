@@ -16,7 +16,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--coral);outline-
 .who{pointer-events:auto;display:flex;gap:10px;align-items:center;background:var(--cob);border:2px solid #fff;border-radius:14px;padding:8px 12px 8px 8px;box-shadow:0 4px 0 rgba(0,0,0,.3);flex:1;max-width:340px}
 .lv{font:700 26px 'Pixelify Sans',monospace;width:46px;height:46px;display:grid;place-items:center;background:var(--coral);border-radius:10px;border:2px solid #fff;flex:none}
 .xpw{flex:1}
-.nm{font:700 16px 'Pixelify Sans',monospace;margin-bottom:3px}
+.nm{font:700 16px 'Pixelify Sans',monospace;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .bar{height:10px;background:rgba(255,255,255,.18);border-radius:3px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:var(--c,var(--coral));transition:width .5s}
 .xpt{font-size:13px;color:var(--mute);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -254,7 +254,6 @@ textarea{width:100%;font:16px Rubik,system-ui,sans-serif;color:var(--ink);backgr
 .fat span{display:block;font-size:12px;color:var(--mute)}
 .fat b{font:700 26px 'Pixelify Sans',monospace}
 /* cómo me siento */
-.when{font:700 16px 'Pixelify Sans',monospace;color:var(--gold);margin:0 0 8px}
 .moods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .mood{min-height:64px;border-radius:12px;border:2px solid rgba(255,255,255,.25);background:var(--cob2);color:var(--ink);cursor:pointer;display:grid;place-items:center;padding:4px 2px;gap:0}
 .mood b{font:700 22px 'Pixelify Sans',monospace;color:var(--m)}
@@ -265,7 +264,6 @@ textarea{width:100%;font:16px Rubik,system-ui,sans-serif;color:var(--ink);backgr
 .mweek i{display:block;width:60%;border-radius:4px}
 .mweek small{font-size:11px;color:var(--mute);text-transform:uppercase}
 :root[data-skin=hacker] .mood{border-radius:4px;border-color:var(--grey)}
-:root[data-skin=hacker] .when{font-family:'VT323',monospace;font-size:20px;color:var(--coral)}
 /* álbum */
 .alhd{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:6px 0 10px}
 .alhd .ghost.slim{width:auto;padding:0 14px;margin:0}
@@ -305,7 +303,7 @@ textarea{width:100%;font:16px Rubik,system-ui,sans-serif;color:var(--ink);backgr
 :root[data-skin=hacker] h1,:root[data-skin=hacker] h2,:root[data-skin=hacker] h3,:root[data-skin=hacker] .nm,:root[data-skin=hacker] .okmsg{color:var(--coral);text-shadow:var(--glow)}
 :root[data-skin=hacker] h2::before,:root[data-skin=hacker] h3::before{content:'> ';opacity:.7}
 :root[data-skin=hacker] .nm{font-size:20px}
-:root[data-skin=hacker] .nm::before{content:'root@';opacity:.6}
+:root[data-skin=hacker] .nm::before{content:'> ';opacity:.6}
 :root[data-skin=hacker] .nm::after{content:'_';animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
 

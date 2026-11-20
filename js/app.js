@@ -990,7 +990,7 @@ function nearCheck() { // te avisa cuando pasás cerca de una misión (como much
 /* ---------- ¿qué estás haciendo? sesiones que suben atributos ---------- */
 const ACTS = {
   entreno: ['Entrenando', 'F'], yoga: ['Yoga o elongación', 'F'], leer: ['Leyendo o estudiando', 'U'], proyecto: ['En un proyecto', 'U'],
-  charla: ['Grabando o charlando', 'C'], casa: ['Ordenando la casa', 'R'], fe: ['Rezando o en misa', 'E'], laburo: ['Laburando', null], descanso: ['Descansando', null]
+  charla: ['Grabando o charlando', 'C'], casa: ['Ordenando la casa', 'R'], viaje: ['Viajando (tren o bondi)', 'R'], fe: ['Rezando o en misa', 'E'], laburo: ['Laburando', null], descanso: ['Descansando', null]
 };
 function askDoing(fromMenu) {
   if (S.walkOn || S.act) { if (fromMenu) toast('Ya tenés algo en curso: terminalo desde la barra de arriba'); return; }
@@ -998,7 +998,7 @@ function askDoing(fromMenu) {
   const chips = Object.entries(ACTS).map(([k, [n]]) => `<button type="button" class="tag tb" data-act="${k}">${n}</button>`).join('');
   if (fromMenu) {
     openM = null; hold = null; noteIdx = null;
-    $('#modalBody').innerHTML = `<h2>¿Qué estás haciendo?</h2><p class="mute">Arrancá el cronómetro y al terminar suma a tu atributo (2 XP por minuto, hasta 120). Si lo hacés con Vaca, el paseo va por su botón.</p><div class="tags">${chips}</div><button class="ghost" id="closeM">Cerrar</button>`;
+    $('#modalBody').innerHTML = `<h2>¿Qué estás haciendo?</h2><p class="mute">Arrancá el cronómetro y al terminar suma a tu atributo (2 XP por minuto, hasta 120; viajando, 1 por minuto hasta 60). Si lo hacés con Vaca, el paseo va por su botón.</p><div class="tags">${chips}</div><button class="ghost" id="closeM">Cerrar</button>`;
     $('#modal').hidden = false;
   } else showPop(`<span class="pk">El juego te pregunta</span><b>¿Qué estás haciendo?</b><div class="tags">${chips}<button type="button" class="tag tb" data-act="no">Ahora no</button></div>`, 20000);
 }
@@ -1020,14 +1020,14 @@ function actUI() {
   const bar = $('#actBar'), a = S.act; bar.hidden = !a;
   if (!a) return;
   const sec = Math.floor((Date.now() - a.start) / 1000);
-  $('#actTxt').textContent = `${ACTS[a.k][0]} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  $('#actTxt').textContent = `${ACTS[a.k][0].replace(/ \(.*\)$/, '')} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 }
 function endAct(discard) {
   const a = S.act; if (!a) return;
   S.act = null; save(); actUI();
   const min = Math.min(240, Math.round((Date.now() - a.start) / 60000));
   if (discard || min < 5) { toast(discard ? 'Descartado' : 'Muy cortito: tiene que durar 5 minutos para contar'); return; }
-  const [n, at] = ACTS[a.k], xp = Math.min(120, min * 2) * xpMult();
+  const viaje = a.k === 'viaje', [n, at] = ACTS[a.k], xp = (viaje ? Math.min(60, min) : Math.min(120, min * 2)) * xpMult();
   if (a.k === 'entreno' || a.k === 'yoga') S.body.tdays[today()] = 1;
   if (at === 'E') feCharge();
   const g = grant(xp, at, { type: 'act', act: a.k, txt: `${n} · ${fmtMin(min)}` });
@@ -1069,7 +1069,9 @@ const ABASE = { F: 3, U: 7, C: 5, R: 5, E: 5 };
 const atLv = k => ABASE[k] + Math.floor(Math.sqrt((S.at[k] || 0) / 40));
 const MOODS = { 1: 'Muy mal', 2: 'Mal', 3: 'Normal', 4: 'Bien', 5: 'Excelente' };
 const MCOL = { 1: '#e2392d', 2: '#ff9d1f', 3: '#aab5e8', 4: '#5fe0b0', 5: '#ffd23f' };
-const nowLabel = () => { const n = new Date(); const d = n.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', ''); return d.charAt(0).toUpperCase() + d.slice(1) + ' · ' + nowHM(); };
+const nowLabel = () => { const n = new Date(); const d = n.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' }).replace(',', ''); return d.charAt(0).toUpperCase() + d.slice(1) + ' · ' + nowHM(); };
+let lastClock = '';
+function clockUI() { const t = nowLabel(); if (t !== lastClock) { lastClock = t; $('#clock').textContent = t; } }
 const lastW = () => S.body.w.length ? S.body.w[S.body.w.length - 1] : null;
 const imc = () => { const w = lastW(); return w ? w.kg / ((S.body.h / 100) ** 2) : null; };
 function vFicha() {
@@ -1079,7 +1081,7 @@ function vFicha() {
   <div class="ficha">${Object.keys(D.ATTR).map(k => `<div class="fat"><span>${D.ATTR[k]}</span><b style="color:${ACOLS[k]}">${atLv(k)}</b></div>`).join('')}</div>
   <p class="mute">Nivel de cada atributo: una base según lo que me contaste (arrancás con Fuerza 3, día 2 de entrenamiento) más lo que vas ganando.</p>
   <div class="row"><span>Fe</span><div class="bar" style="--c:var(--gold)"><i style="width:${fe}%"></i></div><span>${fe}% · ${S.fe.visits || 0} visita${S.fe.visits === 1 ? '' : 's'}</span></div>
-  <h3>Cómo me siento hoy</h3><p class="when" id="whenNow">${nowLabel()}</p>
+  <h3>Cómo me siento hoy</h3>
   <div class="moods">${Object.entries(MOODS).map(([k, n]) => `<button type="button" class="mood" data-mood="${k}" aria-pressed="${S.mood[today()] === +k}" style="--m:${MCOL[k]}"><b>${k}</b><span>${n}</span></button>`).join('')}</div>
   <div class="mweek">${[...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); const v = S.mood[dayKey(d)]; return `<div><i style="height:${v ? v * 8 : 3}px;background:${v ? MCOL[v] : 'rgba(255,255,255,.15)'}"></i><small>${d.toLocaleDateString('es-AR', { weekday: 'narrow' })}</small></div>`; }).join('')}</div>
   <h3>Cuerpo</h3>
@@ -1524,14 +1526,14 @@ document.addEventListener('change', e => { if (e.target.dataset.dnote) { e.targe
 document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (!$('#pop').hidden) return hidePop(); if (openM || noteIdx != null) closeModal(); else if (!$('#dialList').hidden) dial(false); else if (tab !== 'mapa') setTab('mapa'); });
 
 setInterval(() => { if (hold) tickHold(); }, 250);
-setInterval(() => { if (S.walkOn) walkUI(); if (S.act) actUI(); const w = $('#whenNow'); if (w) w.textContent = nowLabel(); }, 1000);
+setInterval(() => { if (S.walkOn) walkUI(); if (S.act) actUI(); clockUI(); }, 1000);
 setInterval(() => { showNext(false); maybeAsk(); sundayCheck(); }, 20 * 60e3);
 let lastSlot = Math.floor(Date.now() / SLOT);
 setInterval(() => { dayCheck(); velezDay(); hud(); if (Math.floor(Date.now() / SLOT) !== lastSlot) { lastSlot = Math.floor(Date.now() / SLOT); draw(); } if (tab === 'misiones') renderSheet(); }, 60000);
 
 /* ---------- arranque ---------- */
 if (hacker()) document.querySelector('meta[name=theme-color]').content = '#020a04';
-hud(); dayCheck(); velezDay(); draw(); walkUI(); actUI(); if (S.walkOn) keepAwake(true);
+hud(); clockUI(); dayCheck(); velezDay(); draw(); walkUI(); actUI(); if (S.walkOn) keepAwake(true);
 try { if (localStorage.getItem('lifebgood-420')) { document.documentElement.dataset.m420 = '1'; $('#m420').setAttribute('aria-pressed', 'true'); } } catch (e) { /* nada */ }
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 setTimeout(() => { if (cloudOn()) cloudPull(false); else cloudPulled = true; }, 1500);
