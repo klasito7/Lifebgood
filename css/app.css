@@ -231,6 +231,49 @@ textarea{width:100%;font:16px Rubik,system-ui,sans-serif;color:var(--ink);backgr
 .snack button{min-height:44px;border-radius:10px;border:2px solid var(--mint);background:none;color:var(--mint);font-weight:600;padding:0 10px;cursor:pointer}
 :root[data-skin=hacker] .snack{background:#020a04;border-color:var(--coral);border-radius:4px;font-family:'Share Tech Mono',monospace;box-shadow:var(--glow)}
 :root[data-skin=hacker] .snack button{border-radius:4px}
+/* aviso flotante (próxima misión, preguntas del juego) */
+.pop{position:fixed;left:8px;right:8px;top:calc(96px + var(--sat));z-index:1200;max-width:460px;margin:0 auto;background:var(--cob);border:2px solid #fff;border-radius:14px;padding:10px 14px;box-shadow:0 5px 0 rgba(0,0,0,.3);cursor:pointer;animation:drop .25s ease-out;transition:opacity .25s,transform .25s}
+.pop.out{opacity:0;transform:translateY(-12px)}
+.pop .pk{display:block;font:700 12px 'Pixelify Sans',monospace;color:var(--coral);letter-spacing:.02em}
+.pop b{display:block;font-weight:600;margin:2px 0}
+.pop small{color:var(--mute);font-size:13px}
+.pop .tags{margin-top:6px}
+@keyframes drop{from{opacity:0;transform:translateY(-14px)}}
+.actbar{background:#2f55e0}
+.walkbar:not([hidden])~.walkbar:not([hidden]){top:calc(150px + var(--sat))}
+.fab420{bottom:calc(84px + var(--sab))}
+.fab420[aria-pressed=true]{background:linear-gradient(135deg,#f72585,#7209b7,#3a0ca3,#4cc9f0)}
+/* ficha */
+.ficha{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.fat{background:var(--cob2);border-radius:12px;padding:8px 4px;text-align:center}
+.fat span{display:block;font-size:12px;color:var(--mute)}
+.fat b{font:700 26px 'Pixelify Sans',monospace}
+/* álbum */
+.alhd{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:6px 0 10px}
+.alhd .ghost.slim{width:auto;padding:0 14px;margin:0}
+.alname{display:block;font:700 28px 'Pixelify Sans',monospace;color:var(--gold)}
+.alname-in{font:700 22px 'Pixelify Sans',monospace;min-height:48px;padding:0 10px;border-radius:10px;border:2px solid var(--gold);background:var(--cob2);color:var(--ink);width:100%}
+.stamps{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.stamp{background:#f6efe0;color:#3a2a12;border-radius:6px;padding:8px;text-align:center;border:2px dashed #c9b48a;box-shadow:0 2px 0 rgba(0,0,0,.25);transform:rotate(-1deg)}
+.stamp:nth-child(2n){transform:rotate(1.2deg)}
+.stamp i{display:grid;place-items:center;width:34px;height:34px;margin:0 auto 4px;border-radius:8px;background:#2448d8;color:#fff;font:700 15px 'Pixelify Sans',monospace;font-style:normal}
+.stamp.t-iglesia i{background:#b8862a}.stamp.t-plaza i{background:#2f8a49}.stamp.t-kiosco i{background:#e2392d}.stamp.t-heladeria i{background:#d14b9b}.stamp.t-panaderia i{background:#a0622d}
+.stamp b{display:block;font-size:12px;line-height:1.2;font-weight:600;overflow-wrap:anywhere}
+.stamp small{font-size:11px;color:#7a6a4a}
+.stamp.empty{background:transparent;border-color:rgba(255,255,255,.25);color:var(--mute);transform:none;display:grid;place-items:center;min-height:86px}
+.stamp.empty i{background:rgba(255,255,255,.08);color:var(--mute)}
+.medal-s{font:600 12px Rubik,sans-serif;padding:2px 8px;border-radius:999px;vertical-align:3px}
+.medal-s.bronce{background:#a0622d;color:#fff}.medal-s.plata{background:#c0c6d4;color:#222}.medal-s.oro{background:#ffd23f;color:#3a2a00}
+@media(max-width:420px){.ficha{grid-template-columns:repeat(3,minmax(0,1fr))}}
+:root[data-skin=hacker] .pop{background:#020a04;border-color:var(--coral);border-radius:4px;box-shadow:var(--glow);font-family:'Share Tech Mono',monospace}
+:root[data-skin=hacker] .pop .pk{font-family:'VT323',monospace;font-size:16px}
+:root[data-skin=hacker] .fat{border:1px solid var(--grey);border-radius:4px}
+:root[data-skin=hacker] .fat b{font-family:'VT323',monospace;font-size:32px}
+:root[data-skin=hacker] .actbar{background:#020a04;border-color:var(--blue);color:var(--blue)}
+:root[data-skin=hacker] .stamp{background:#020a04;color:var(--coral);border-color:var(--grey);font-family:'Share Tech Mono',monospace}
+:root[data-skin=hacker] .stamp i{background:#020a04;border:1px solid var(--coral);color:var(--coral)}
+:root[data-skin=hacker] .alname{font-family:'VT323',monospace;color:var(--coral);text-shadow:var(--glow)}
+
 /* ================= SKIN HACKER =================
    terminal verde sobre negro, mapa en modo noche, letra de consola y líneas de monitor */
 :root[data-skin=hacker]{--cob:#020a04;--cob2:#06170b;--cob3:#0b2414;--coral:#00ff66;--mint:#39ff88;--blue:#00e5ff;--cyan:#7dffb0;--gold:#d4ff00;--ink:#b6ffcb;--mute:#3fbf6a;--grey:#0f3a1d;--glow:0 0 6px rgba(0,255,102,.55)}
@@ -292,3 +335,22 @@ textarea{width:100%;font:16px Rubik,system-ui,sans-serif;color:var(--ink);backgr
 :root[data-skin=hacker] body::after{content:'';position:fixed;inset:0;z-index:5000;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
 @media(prefers-reduced-motion:reduce){:root[data-skin=hacker] .nm::after{animation:none}}
 @media(max-width:420px){:root[data-skin=hacker] .ag{grid-template-columns:4.6em minmax(0,1fr)}}
+
+/* ================= MODO 420 =================
+   psicodelia por encima de cualquier skin; al apagarlo vuelve todo como estaba */
+:root[data-m420]{--coral:#ff3cac;--mint:#00f5d4;--blue:#9b5de5;--cyan:#00bbf9;--gold:#fee440;--ink:#fff;--mute:#f3d1ff;--psy:linear-gradient(120deg,#7209b7,#f72585,#ff7b00,#fee440,#00f5d4,#3a0ca3,#7209b7)}
+:root[data-m420] .leaflet-tile-pane{animation:psymap 16s linear infinite}
+@keyframes psymap{0%{filter:saturate(3) contrast(1.15) hue-rotate(0deg)}100%{filter:saturate(3) contrast(1.15) hue-rotate(360deg)}}
+:root[data-m420] .who,:root[data-m420] .chip,:root[data-m420] .sheet,:root[data-m420] .shd,:root[data-m420] .mcard,:root[data-m420] .dial-it span,:root[data-m420] .dial-it i,:root[data-m420] .walkbar,:root[data-m420] .snack,:root[data-m420] .pop,:root[data-m420] .fab,:root[data-m420] .dial-main,:root[data-m420] .toast,:root[data-m420] .intro{background:var(--psy);background-size:500% 500%;animation:psyflow 9s ease-in-out infinite;border-color:#fff;color:#fff}
+:root[data-m420] .st,:root[data-m420] .mi,:root[data-m420] .ag,:root[data-m420] .de,:root[data-m420] .re,:root[data-m420] .ach,:root[data-m420] .fat,:root[data-m420] .score>div{background:rgba(20,0,40,.55)}
+@keyframes psyflow{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+:root[data-m420] h1,:root[data-m420] h2,:root[data-m420] h3,:root[data-m420] .nm,:root[data-m420] .alname,:root[data-m420] .shd b{background:linear-gradient(90deg,#fee440,#ff3cac,#00f5d4,#fee440);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:psyflow 6s linear infinite;text-shadow:none}
+:root[data-m420] .me-in,:root[data-m420] .vaca-in{animation:bob 1s steps(1) infinite,psyhue 4s linear infinite}
+:root[data-m420] .poi,:root[data-m420] .fd,:root[data-m420] .pd{animation:psyhue 5s linear infinite}
+@keyframes psyhue{to{filter:hue-rotate(360deg) saturate(1.6)}}
+:root[data-m420] body::before{content:'';position:fixed;left:50%;top:50%;width:220vmax;height:220vmax;margin:-110vmax 0 0 -110vmax;z-index:450;pointer-events:none;background:repeating-conic-gradient(from 0deg,rgba(255,60,172,.14) 0 9deg,rgba(0,245,212,.12) 9deg 18deg,rgba(254,228,64,.12) 18deg 27deg,rgba(114,9,183,.14) 27deg 36deg);mix-blend-mode:screen;animation:psyspin 60s linear infinite}
+@keyframes psyspin{to{transform:rotate(360deg)}}
+:root[data-m420] .bar i{background:linear-gradient(90deg,#f72585,#fee440,#00f5d4)}
+:root[data-m420] .big,:root[data-m420] .qabtn{background:linear-gradient(90deg,#f72585,#7209b7);color:#fff}
+@media(prefers-reduced-motion:reduce){:root[data-m420] *,:root[data-m420] body::before{animation:none!important}}
+

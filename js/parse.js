@@ -12,6 +12,7 @@
     F: ['entren', 'pesas', 'gym', 'gimnasio', 'yoga', 'flexion', 'sentadill', 'correr', 'abdominal', 'rutina', 'estir', 'elong', 'fuerza', 'bici', 'patio'],
     R: ['pase', 'vaca', 'camin', 'limpi', 'orden', 'lavar', 'tramite', 'cocin', 'compra', 'super', 'barrer', 'oficina', 'laburo', 'trabajo', 'mandar', 'retirar', 'pagar'],
     C: ['juntada', 'junta', 'llamar', 'mensaje', 'podcast', 'cumple', 'visitar', 'charlar', 'reunion', 'salir', 'mama', 'papa', 'familia', 'amig', 'cita', 'grabar', 'hablar'],
+    E: ['misa', 'rezar', 'reza', 'iglesia', 'parroquia', 'rosario', 'orar', 'capilla', 'biblia'],
     U: ['leer', 'estudi', 'aprend', 'curso', 'program', 'proyecto', 'investig', 'buscar', 'mirar', 'probar', 'escribir', 'idioma', 'ingles', 'portfolio', 'automatiz', 'lanzamiento']
   };
   const XP = { p: 80, s: 40, d: 20 };

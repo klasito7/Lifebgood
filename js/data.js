@@ -25,11 +25,16 @@ window.LB_DATA = {
       ['Comprá una fruta de estación', 'R'],
       ['Preguntá qué está más rico esta semana', 'C']
     ]},
+    iglesia: { n: 'Iglesia', g: '†', r: 40, t: [
+      ['Entrá un momento y hacé la señal de la cruz', 'E'],
+      ['Quedate un minuto en silencio y agradecé algo de hoy', 'E'],
+      ['Rezá por alguien que quieras', 'E']
+    ]},
     cafe: { n: 'Café', g: 'C', r: 30, t: [
       ['Pedí un café y quedate 10 minutos sin el celu', 'R'],
       ['Pedí algo de la carta que no conocés', 'U']
     ]}
   },
   RAR: { c: { n: 'Común', xp: 30 }, r: { n: 'Rara', xp: 60 }, e: { n: 'Épica', xp: 120 } },
-  ATTR: { F: 'Fuerza', U: 'Curiosidad', C: 'Carisma', R: 'Resistencia' }
+  ATTR: { F: 'Fuerza', U: 'Curiosidad', C: 'Carisma', R: 'Resistencia', E: 'Fe' }
 };

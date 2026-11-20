@@ -25,11 +25,18 @@ const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Mat
 const lvl = xp => { let L = 1; while (xp >= 50 * L * (L + 1)) L++; return { L, lo: 50 * (L - 1) * L, hi: 50 * L * (L + 1) }; };
 
 /* ---------- estado (queda en este celu) ---------- */
-const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0 }, km: 0, kmDay: {}, xpDay: {}, log: [], visited: {}, cells: {}, day: null, missions: [], rerolls: 0, expired: 0, perfect: {}, poi: null, tasks: [], dailies: [], learn: {}, gcal: { cid: '', write: false, last: 0 }, disc: {}, wx: null, velez: null, duel: null, walks: [], walkOn: null, fx: { token: '', gist: null, ev: [], sent: 0, last: 0, err: '', lv: null }, found: {}, foundDay: {} });
+const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0, E: 0 }, km: 0, kmDay: {}, xpDay: {}, log: [], visited: {}, cells: {}, day: null, missions: [], rerolls: 0, expired: 0, perfect: {}, poi: null, tasks: [], dailies: [], learn: {}, gcal: { cid: '', write: false, last: 0 }, disc: {}, wx: null, velez: null, duel: null, walks: [], walkOn: null, fx: { token: '', gist: null, ev: [], sent: 0, last: 0, err: '', lv: null }, found: {}, foundDay: {},
+  fe: { v: 60, t: Date.now(), visits: 0, last: {} },
+  body: { h: 177, w: [{ d: '2026-11-20', kg: 84 }], tdays: { '2026-11-19': 1 } },
+  cloud: { gist: null, last: 0, err: '' },
+  vtrain: { tricks: [{ id: 'circuito', n: 'Circuito en el patio' }, { id: 'kong', n: 'Buscar el Kong olfateando' }], ses: [] },
+  heat: {}, act: null, lastAsk: 0, temper: '', album: 'Monte Grande', sumShown: '', upd: 0 });
 let S = blank();
-function load() { S = blank(); try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(blank(), JSON.parse(r)); } catch (e) { /* sin almacenamiento */ } }
+function load() { S = blank(); try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(blank(), JSON.parse(r)); } catch (e) { /* sin almacenamiento */ } norm(); }
+function norm() { const B = blank(); S.at = Object.assign({}, B.at, S.at); for (const k of ['fe', 'body', 'cloud', 'vtrain', 'heat']) S[k] = Object.assign({}, B[k], S[k]); }
 load();
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* lleno o bloqueado */ } };
+const saveLocal = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* lleno o bloqueado */ } };
+const save = () => { S.upd = Date.now(); saveLocal(); cloudSoon(); };
 
 /* ---------- sprites ---------- */
 const PAL = { h: '#3a2418', s: '#e2a877', e: '#111', w: '#f4f6ff', b: '#2448d8', p: '#2a3150', k: '#151515', d: '#0e2a17', n: '#020604', g: '#00ff66', q: '#163a22' };
@@ -96,7 +103,7 @@ function onPos(p) {
   $('#gps').textContent = demo ? 'Modo prueba' : good ? 'GPS ok' : 'GPS ±' + Math.round(acc) + ' m';
   $('#gps').className = 'chip ' + (good ? 'ok' : 'warn');
   track(ll, acc);
-  discover(ll, acc); pickFinds(ll, acc); loadWx(); loadVelez(); if (S.walkOn) walkUI();
+  discover(ll, acc); pickFinds(ll, acc); churchCheck(ll, acc); nearCheck(); loadWx(); loadVelez(); if (S.walkOn) walkUI();
   dayCheck();
   ensurePOIs();
   if (openM && !hold) renderModal();
@@ -113,20 +120,20 @@ function track(ll, acc) {
     const d = dist(last.ll, ll), dt = Math.max((now - last.t) / 1000, 1);
     if (d < 10) { save(); return; }
     const vehiculo = !demo && d / dt > 2.8; // más de ~10 km/h: tren, bondi o auto, no cuenta
-    if (!vehiculo && d < 1500) { const t = today(); S.km += d / 1000; S.kmDay[t] = (S.kmDay[t] || 0) + d / 1000; walkTrack(ll, d); }
+    if (!vehiculo && d < 1500) { const t = today(); S.km += d / 1000; S.kmDay[t] = (S.kmDay[t] || 0) + d / 1000; walkTrack(ll, d); heatAdd(ll); }
   }
   last = { ll, t: now };
   save(); hud();
 }
 
 /* ---------- lugares de OpenStreetMap ---------- */
-const classify = t => /^(kiosk|convenience)$/.test(t.shop || '') ? 'kiosco' : t.shop === 'bakery' ? 'panaderia' : t.leisure === 'park' ? 'plaza' : (t.amenity === 'ice_cream' || t.shop === 'ice_cream') ? 'heladeria' : t.shop === 'greengrocer' ? 'verduleria' : t.amenity === 'cafe' ? 'cafe' : null;
+const classify = t => /^(kiosk|convenience)$/.test(t.shop || '') ? 'kiosco' : t.shop === 'bakery' ? 'panaderia' : t.leisure === 'park' ? 'plaza' : (t.amenity === 'ice_cream' || t.shop === 'ice_cream') ? 'heladeria' : t.shop === 'greengrocer' ? 'verduleria' : t.amenity === 'cafe' ? 'cafe' : t.amenity === 'place_of_worship' ? 'iglesia' : null;
 
 async function fetchPOIs(ll) {
   // se consulta con el punto redondeado (~500 m) para no mandar tu ubicación exacta
   const c = [+(Math.round(ll[0] / 0.005) * 0.005).toFixed(3), +(Math.round(ll[1] / 0.005) * 0.005).toFixed(3)];
   const a = `(around:${QUERY_R},${c[0]},${c[1]})`;
-  const q = `[out:json][timeout:25];(nwr["shop"~"^(kiosk|convenience)$"]${a};nwr["shop"="bakery"]${a};nwr["leisure"="park"]${a};nwr["amenity"="ice_cream"]${a};nwr["shop"="ice_cream"]${a};nwr["shop"="greengrocer"]${a};nwr["amenity"="cafe"]${a};);out center 500;`;
+  const q = `[out:json][timeout:25];(nwr["shop"~"^(kiosk|convenience)$"]${a};nwr["shop"="bakery"]${a};nwr["leisure"="park"]${a};nwr["amenity"="ice_cream"]${a};nwr["shop"="ice_cream"]${a};nwr["shop"="greengrocer"]${a};nwr["amenity"="cafe"]${a};nwr["amenity"="place_of_worship"]["religion"="christian"]${a};);out center 600;`;
   const r = await fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) });
   if (!r.ok) throw new Error('Overpass ' + r.status);
   const j = await r.json();
@@ -137,13 +144,13 @@ async function fetchPOIs(ll) {
     if (lat == null || !type) continue;
     list.push({ id: el.type[0] + el.id, ll: [lat, lon], type, name: (tags.name || '').slice(0, 60) });
   }
-  S.poi = { c, t: Date.now(), list };
+  S.poi = { c, t: Date.now(), list, v: 2 };
   save();
 }
 
 async function ensurePOIs() {
   if (!pos || fetching) return;
-  const stale = !S.poi || dist(S.poi.c, pos.ll) > 1000 || Date.now() - S.poi.t > 7 * 864e5;
+  const stale = !S.poi || S.poi.v !== 2 || dist(S.poi.c, pos.ll) > 1000 || Date.now() - S.poi.t > 7 * 864e5;
   if (stale && Date.now() - failAt > 60000) {
     fetching = true; if (tab === 'misiones') renderSheet();
     try { await fetchPOIs(pos.ll); }
@@ -151,6 +158,7 @@ async function ensurePOIs() {
     fetching = false;
   }
   if (S.poi && !S.day) gen(false);
+  if (stale && S.poi && pos) { discover(pos.ll, pos.acc); churchCheck(pos.ll, pos.acc); }
   draw();
   if (tab === 'misiones') renderSheet();
 }
@@ -250,6 +258,7 @@ function complete(m) {
   S.xpDay[t] = (S.xpDay[t] || 0) + xp;
   S.visited[m.poi] = { d: t, type: m.type };
   if (!S.disc[m.poi]) S.disc[m.poi] = { d: t, type: m.type, name: m.name, ll: m.ll };
+  if (m.type === 'iglesia') feCharge();
   S.log.push({ t, h: nowHM(), type: m.type, rar: m.rar, a: m.a, xp, txt: m.txt, name: m.name });
   if (S.missions.every(x => x.st === 'done')) S.perfect[t] = 1;
   save(); draw(); hud(); renderSheet(); offerNote(S.log.length - 1);
@@ -262,8 +271,8 @@ function complete(m) {
 const P = window.LB_PARSE;
 const KN = { p: 'Principal', s: 'Secundaria', d: 'Diaria' };
 const KNUM = { p: 1, s: 2, d: 3 };
-const ACOLS = { F: 'var(--coral)', U: 'var(--blue)', C: 'var(--mint)', R: 'var(--cyan)' };
-const CYC_K = ['p', 's', 'd'], CYC_A = ['F', 'U', 'C', 'R'];
+const ACOLS = { F: 'var(--coral)', U: 'var(--blue)', C: 'var(--mint)', R: 'var(--cyan)', E: 'var(--gold)' };
+const CYC_K = ['p', 's', 'd'], CYC_A = ['F', 'U', 'C', 'R', 'E'];
 const nextOf = (arr, v) => arr[(arr.indexOf(v) + 1) % arr.length];
 const uid = () => Math.random().toString(36).slice(2, 9);
 const minsOf = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
@@ -900,7 +909,7 @@ function pick(f) {
   if ((S.foundDay[t] || 0) >= FIND_CAP) return;
   S.found[f.id] = Date.now(); S.foundDay[t] = (S.foundDay[t] || 0) + 1;
   const m = xpMult();
-  const R0 = { bolsa: [f.val, 5], energia: [0, 30], cofre: [20, 50], grande: [25, 10], vaca: [0, 20], velez: [0, 20] }[f.type];
+  const R0 = { bolsa: [f.val, 3], energia: [0, 20], cofre: [20, 30], grande: [25, 8], vaca: [0, 15], velez: [0, 15] }[f.type];
   const vc = R0[0], xp = R0[1] * m;
   S.xp += xp; S.at.R += xp; S.xpDay[t] = (S.xpDay[t] || 0) + xp;
   if (vc) fxAdd({ id: 'f' + f.id, ty: 'coins', n: vc, why: FDEF[f.type].n });
@@ -912,6 +921,311 @@ function pick(f) {
   try { navigator.vibrate && navigator.vibrate([30, 30, 30, 30, 90]); } catch (e) { /* sin vibración */ }
 }
 function cleanFinds() { const lim = Date.now() - 2 * 864e5; for (const [k, v] of Object.entries(S.found)) if (v < lim) delete S.found[k]; }
+
+/* ---------- utilidades compartidas ---------- */
+function grant(xp, a, entry) {
+  const t = today(), before = lvl(S.xp).L;
+  S.xp += xp; S.at[a] = (S.at[a] || 0) + xp; S.xpDay[t] = (S.xpDay[t] || 0) + xp;
+  const i = S.log.push(Object.assign({ t, h: nowHM(), a, xp }, entry)) - 1;
+  save(); hud(); renderSheet();
+  const L2 = lvl(S.xp).L;
+  return { i, up: L2 > before ? L2 : 0 };
+}
+
+/* ---------- aviso flotante que aparece y se va (no frena nada) ---------- */
+let popT = null, popAct = null;
+function showPop(html, ms, onTap) {
+  const el = $('#pop');
+  el.innerHTML = html; el.hidden = false; el.classList.remove('out');
+  popAct = onTap || null;
+  clearTimeout(popT); if (ms) popT = setTimeout(hidePop, ms);
+}
+function hidePop() { const el = $('#pop'); el.classList.add('out'); clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; }, 250); }
+const busy = () => !$('#modal').hidden || !$('#dialList').hidden;
+
+/* próxima misión: la de la agenda que viene, o la más cercana del mapa */
+function nextUp() {
+  const n = new Date(), mins = n.getHours() * 60 + n.getMinutes();
+  const ag = S.tasks.filter(t => t.date === today() && t.st === 'open' && t.time).map(t => ({ t, dm: minsOf(t.time) - mins })).filter(x => x.dm >= -60 && x.dm <= 120).sort((a, b) => Math.abs(a.dm) - Math.abs(b.dm))[0];
+  if (ag) return { kind: 'agenda', title: ag.t.title, sub: ag.dm > 5 ? `Agenda · en ${fmtMin(ag.dm)}` : ag.dm >= -5 ? 'Agenda · ¡es ahora!' : `Agenda · era hace ${fmtMin(-ag.dm)}` };
+  if (pos) {
+    const m = S.missions.filter(x => x.st === 'open').map(x => ({ x, d: dist(pos.ll, x.ll) })).sort((a, b) => a.d - b.d)[0];
+    if (m) return { kind: 'map', id: m.x.id, title: m.x.txt, sub: `${m.x.name || D.TYPES[m.x.type].n} · a ${fmtD(m.d)}` };
+  }
+  return null;
+}
+let lastNext = 0;
+function showNext(force) {
+  if (!force && (tab !== 'mapa' || busy() || !$('#pop').hidden || Date.now() - lastNext < 3 * 60e3)) return;
+  const n = nextUp(); if (!n) return;
+  lastNext = Date.now();
+  showPop(`<span class="pk">Próxima misión</span><b>${esc(n.title)}</b><small>${esc(n.sub)}</small>`, 7000, () => { hidePop(); if (n.kind === 'map') openMission(n.id); else setTab('misiones'); });
+}
+const nearSeen = {};
+function nearCheck() { // te avisa cuando pasás cerca de una misión
+  if (!pos || busy()) return;
+  for (const m of S.missions) {
+    if (m.st !== 'open' || nearSeen[m.id]) continue;
+    const d = dist(pos.ll, m.ll);
+    if (d < 150) { nearSeen[m.id] = 1; showPop(`<span class="pk">Estás cerca</span><b>${esc(m.txt)}</b><small>${esc(m.name || D.TYPES[m.type].n)} · a ${fmtD(d)}</small>`, 8000, () => { hidePop(); openMission(m.id); }); return; }
+  }
+}
+
+/* ---------- ¿qué estás haciendo? sesiones que suben atributos ---------- */
+const ACTS = {
+  entreno: ['Entrenando', 'F'], yoga: ['Yoga o elongación', 'F'], leer: ['Leyendo o estudiando', 'U'], proyecto: ['En un proyecto', 'U'],
+  charla: ['Grabando o charlando', 'C'], casa: ['Ordenando la casa', 'R'], fe: ['Rezando o en misa', 'E'], laburo: ['Laburando', null], descanso: ['Descansando', null]
+};
+function askDoing(fromMenu) {
+  if (S.walkOn || S.act) { if (fromMenu) toast('Ya tenés algo en curso: terminalo desde la barra de arriba'); return; }
+  S.lastAsk = Date.now(); saveLocal();
+  const chips = Object.entries(ACTS).map(([k, [n]]) => `<button type="button" class="tag tb" data-act="${k}">${n}</button>`).join('');
+  if (fromMenu) {
+    openM = null; hold = null; noteIdx = null;
+    $('#modalBody').innerHTML = `<h2>¿Qué estás haciendo?</h2><p class="mute">Arrancá el cronómetro y al terminar suma a tu atributo (2 XP por minuto, hasta 120). Si lo hacés con Vaca, el paseo va por su botón.</p><div class="tags">${chips}</div><button class="ghost" id="closeM">Cerrar</button>`;
+    $('#modal').hidden = false;
+  } else showPop(`<span class="pk">El juego te pregunta</span><b>¿Qué estás haciendo?</b><div class="tags">${chips}<button type="button" class="tag tb" data-act="no">Ahora no</button></div>`, 20000);
+}
+function maybeAsk() {
+  const h = new Date().getHours();
+  if (demo || S.walkOn || S.act || busy() || !$('#pop').hidden) return;
+  if (h < 7 || h >= 23 || Date.now() - (S.lastAsk || 0) < 3 * 3600e3) return;
+  askDoing(false);
+}
+function startAct(k) {
+  hidePop(); closeModal();
+  if (k === 'no') { S.lastAsk = Date.now(); saveLocal(); return; }
+  const [n, a] = ACTS[k];
+  if (!a) { S.lastAsk = Date.now(); saveLocal(); toast(k === 'laburo' ? 'Dale, te dejo tranquilo. ¡Buen laburo!' : 'Bien merecido. Disfrutalo'); return; }
+  S.act = { k, start: Date.now() }; save(); keepAwake(false); actUI();
+  toast(`${n}: arrancó el cronómetro`);
+}
+function actUI() {
+  const bar = $('#actBar'), a = S.act; bar.hidden = !a;
+  if (!a) return;
+  const sec = Math.floor((Date.now() - a.start) / 1000);
+  $('#actTxt').textContent = `${ACTS[a.k][0]} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+function endAct(discard) {
+  const a = S.act; if (!a) return;
+  S.act = null; save(); actUI();
+  const min = Math.min(240, Math.round((Date.now() - a.start) / 60000));
+  if (discard || min < 5) { toast(discard ? 'Descartado' : 'Muy cortito: tiene que durar 5 minutos para contar'); return; }
+  const [n, at] = ACTS[a.k], xp = Math.min(120, min * 2) * xpMult();
+  if (a.k === 'entreno' || a.k === 'yoga') S.body.tdays[today()] = 1;
+  if (at === 'E') feCharge();
+  const g = grant(xp, at, { type: 'act', act: a.k, txt: `${n} · ${fmtMin(min)}` });
+  // si en la agenda de hoy había algo parecido, queda cumplido solo
+  const kw = { entreno: /entren|pesas|rutina|patio/, yoga: /yoga|elong|estir/, leer: /leer|estudi/, proyecto: /proyect|program/, charla: /podcast|grab|charl/, casa: /orden|limpi/, fe: /misa|rez|igles/ }[a.k];
+  const t = kw && S.tasks.find(x => x.date === today() && x.st === 'open' && kw.test(P.key(x.title)));
+  if (t) completeTask(t.id, true);
+  toast(g.up ? `¡Subiste a nivel ${g.up}!` : `${n}: +${xp} XP de ${D.ATTR[at]}`);
+  if (a.k === 'entreno') setTimeout(() => showPop(`<span class="pk">Entrenamiento</span><b>¿Entrenaste a Vaca también?</b><div class="tags"><button type="button" class="tag tb" data-vt="1">Sí, anotar</button><button type="button" class="tag tb" data-vt="0">Hoy no</button></div>`, 15000), 1500);
+  else offerNote(g.i);
+}
+
+/* ---------- Fe: se recarga en la iglesia ---------- */
+const feNow = () => Math.max(0, Math.round(S.fe.v - (Date.now() - S.fe.t) / (3 * 3600e3)));
+function feCharge() { S.fe.v = 100; S.fe.t = Date.now(); S.fe.visits = (S.fe.visits || 0) + 1; save(); hud(); }
+function churchCheck(ll, acc) {
+  if (!S.poi || (acc > 40 && !demo) || busy()) return;
+  const t = today();
+  for (const p of S.poi.list) {
+    if (p.type !== 'iglesia' || S.fe.last[p.id] === t) continue;
+    if (dist(ll, p.ll) <= 45) {
+      S.fe.last[p.id] = t; saveLocal();
+      showPop(`<span class="pk">Fe ${feNow()}%</span><b>Pasás por ${esc(p.name || 'una iglesia')}</b><small>¿Hacés la señal de la cruz?</small><div class="tags"><button type="button" class="tag tb" data-cruz="${esc(p.id)}">Hecho</button><button type="button" class="tag tb" data-cruz="">Ahora no</button></div>`, 25000);
+      return;
+    }
+  }
+}
+function cruz(id) {
+  hidePop(); if (!id) return;
+  feCharge();
+  const p = S.poi && S.poi.list.find(x => x.id === id);
+  grant(10 * xpMult(), 'E', { type: 'fe', txt: 'Señal de la cruz' + (p && p.name ? ' en ' + p.name : '') });
+  toast('La fe se recargó');
+}
+
+/* ---------- ficha del personaje y cuerpo ---------- */
+// base de cada atributo según lo que contaste (se suma lo que vas ganando)
+const ABASE = { F: 3, U: 7, C: 5, R: 5, E: 5 };
+const atLv = k => ABASE[k] + Math.floor(Math.sqrt((S.at[k] || 0) / 40));
+const TEMPS = { sanguineo: 'Sanguíneo', colerico: 'Colérico', melancolico: 'Melancólico', flematico: 'Flemático' };
+const lastW = () => S.body.w.length ? S.body.w[S.body.w.length - 1] : null;
+const imc = () => { const w = lastW(); return w ? w.kg / ((S.body.h / 100) ** 2) : null; };
+function vFicha() {
+  const w = lastW(), i = imc(), td = Object.keys(S.body.tdays).length, fe = feNow();
+  const ws = S.body.w.slice(-8), mn = Math.min(...ws.map(x => x.kg)) - 1, mx = Math.max(...ws.map(x => x.kg)) + 1;
+  return `<h3>Tu personaje</h3>
+  <div class="ficha">${Object.keys(D.ATTR).map(k => `<div class="fat"><span>${D.ATTR[k]}</span><b style="color:${ACOLS[k]}">${atLv(k)}</b></div>`).join('')}</div>
+  <p class="mute">Nivel de cada atributo: una base según lo que me contaste (arrancás con Fuerza 3, día 2 de entrenamiento) más lo que vas ganando.</p>
+  <div class="row"><span>Fe</span><div class="bar" style="--c:var(--gold)"><i style="width:${fe}%"></i></div><span>${fe}% · ${S.fe.visits || 0} visita${S.fe.visits === 1 ? '' : 's'}</span></div>
+  <h3>Temperamento</h3><div class="tags">${Object.entries(TEMPS).map(([k, n]) => `<button type="button" class="tag tb" data-temp="${k}" aria-pressed="${(S.temper || '').split('+').includes(k)}">${n}</button>`).join('')}</div>
+  <p class="mute">Podés marcar uno o dos (mezcla).</p>
+  <h3>Cuerpo</h3>
+  <div class="grid"><div class="st"><span>Altura</span><b>${(S.body.h / 100).toLocaleString('es-AR')} m</b></div><div class="st"><span>Peso</span><b>${w ? w.kg.toLocaleString('es-AR') + ' kg' : '—'}</b></div>
+  <div class="st"><span>IMC</span><b>${i ? i.toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—'}</b></div><div class="st"><span>Días entrenados</span><b>${td}</b></div></div>
+  <p class="mute">El IMC solo mira peso y altura: no distingue músculo de grasa. Con tu plan de ganar músculo, el peso puede subir y estar todo bien; mirá también cómo te queda la ropa y cuánto levantás.</p>
+  ${ws.length > 1 ? rows(ws.map(x => [fmtDay(x.d), x.kg - mn, x.kg.toLocaleString('es-AR') + ' kg']), mx - mn, 'var(--coral)') : ''}
+  <div class="row2"><input id="kgIn" type="text" inputmode="decimal" placeholder="Peso de hoy (kg), ej. 83,6" aria-label="Peso de hoy en kg"><button class="ghost" id="kgSave">Anotar</button></div>`;
+}
+
+/* ---------- adiestrar a Vaca ---------- */
+let vtSel = new Set(), vtR = 2;
+function vacaTrain() {
+  hidePop(); openM = null; hold = null; noteIdx = null; vtSel = new Set(); vtR = 2;
+  const T = S.vtrain.tricks;
+  $('#modalBody').innerHTML = `<div class="vaca-big">${vacaSprite()}</div><h2>Adiestramiento</h2>
+    <p class="mute">¿Qué practicaron hoy?</p>
+    <div class="tags" id="vtT">${T.map(t => `<button type="button" class="tag tb" data-vtt="${esc(t.id)}" aria-pressed="false">${esc(t.n)}</button>`).join('')}</div>
+    <div class="row2" style="margin-top:6px"><input id="vtNew" placeholder="Truco nuevo (ej. quedarse quieta)" maxlength="40" aria-label="Truco nuevo"><button class="ghost" id="vtAdd">Sumar</button></div>
+    <p class="mute" style="margin-top:12px">¿Cómo le fue?</p>
+    <div class="tags">${[[1, 'Le costó'], [2, 'Bien'], [3, '¡La rompió!']].map(([n, l]) => `<button type="button" class="tag tb" data-vtr="${n}" aria-pressed="${n === 2}">${l}</button>`).join('')}</div>
+    <button class="big" id="vtSave">Anotar sesión</button><button class="ghost" id="closeM">Cerrar</button>`;
+  $('#modal').hidden = false;
+}
+function vtStats() {
+  return S.vtrain.tricks.map(t => {
+    const ss = S.vtrain.ses.filter(x => x.tricks.includes(t.id)), good = ss.filter(x => x.r >= 2).length;
+    return [t.n, Math.min(5, Math.floor(good / 3)), ss.length];
+  });
+}
+
+/* ---------- álbum del barrio ---------- */
+const MEDAL = p => p >= 1 ? ['oro', 'Oro'] : p >= .5 ? ['plata', 'Plata'] : p >= .25 ? ['bronce', 'Bronce'] : null;
+function vAlbum() {
+  const list = S.poi ? S.poi.list : [], ids = new Set(list.map(p => p.id));
+  const mine = list.filter(p => S.disc[p.id]), pct = list.length ? mine.length / list.length : 0, M = MEDAL(pct);
+  const otros = Object.entries(S.disc).filter(([id]) => !ids.has(id));
+  const sec = k => {
+    const all = list.filter(p => p.type === k); if (!all.length) return '';
+    const got = all.filter(p => S.disc[p.id]), m = MEDAL(got.length / all.length), miss = all.length - got.length;
+    return `<h3>${D.TYPES[k].n}s <span class="mute" style="font:inherit;font-size:14px">${got.length}/${all.length}</span>${m ? ` <span class="medal-s ${m[0]}">${m[1]}</span>` : ''}</h3>
+      <div class="stamps">${got.map(p => `<div class="stamp t-${k}"><i>${D.TYPES[k].g}</i><b>${esc(p.name || D.TYPES[k].n + ' sin nombre')}</b><small>${fmtDay(S.disc[p.id].d)}</small></div>`).join('')}${Array.from({ length: Math.min(miss, 8) }, () => '<div class="stamp empty"><i>?</i></div>').join('')}${miss > 8 ? `<div class="stamp empty"><small>+${miss - 8}</small></div>` : ''}</div>`;
+  };
+  return `<div class="alhd"><div><span class="mute">Álbum de</span><b class="alname">${esc(S.album)}</b></div><button class="ghost slim" id="alRen">Cambiar nombre</button></div>
+    <div class="row"><span>Completo</span><div class="bar" style="--c:var(--gold)"><i style="width:${pct * 100}%"></i></div><span>${Math.round(pct * 100)}%${M ? ' · ' + M[1] : ''}</span></div>
+    <p class="mute">${mine.length} de ${list.length} lugares. Cada lugar por el que pasás se pega solo. Medallas: bronce 25%, plata 50%, oro 100%.</p>
+    ${Object.keys(D.TYPES).map(sec).join('')}
+    ${otros.length ? `<h3>Otras zonas <span class="mute" style="font:inherit;font-size:14px">${otros.length}</span></h3><div class="stamps">${otros.map(([, v]) => `<div class="stamp t-${v.type}"><i>${D.TYPES[v.type] ? D.TYPES[v.type].g : '?'}</i><b>${esc(v.name || (D.TYPES[v.type] ? D.TYPES[v.type].n : 'Lugar'))}</b><small>${fmtDay(v.d)}</small></div>`).join('')}</div>` : ''}`;
+}
+
+/* ---------- resumen del domingo ---------- */
+function weekStats(wk) {
+  const ds = weekDays(wk), set = new Set(ds), L0 = S.log.filter(e => set.has(e.t));
+  const xp = ds.reduce((s, d) => s + (S.xpDay[d] || 0), 0), km = ds.reduce((s, d) => s + (S.kmDay[d] || 0), 0);
+  const at = {}; L0.forEach(e => { if (e.a) at[e.a] = (at[e.a] || 0) + e.xp; });
+  const best = ds.map(d => [d, S.xpDay[d] || 0]).sort((a, b) => b[1] - a[1])[0];
+  const notes = L0.filter(e => e.note).sort((a, b) => b.note.length - a.note.length);
+  return { ds, xp, km, at, best, note: notes[0], mis: L0.filter(e => !['disc', 'find', 'fe', 'act'].includes(e.type)).length, disc: L0.filter(e => e.type === 'disc').length, finds: L0.filter(e => e.type === 'find').length,
+    walks: S.walks.filter(w => set.has(w.d)).length, train: ds.filter(d => S.body.tdays[d]).length, fe: L0.filter(e => e.type === 'fe' || (e.type === 'iglesia')).length };
+}
+function vResumen() {
+  const wk = weekKey(new Date()), w = weekStats(wk), prev = new Date(wk + 'T12:00'); prev.setDate(prev.getDate() - 7);
+  const p = weekStats(dayKey(prev)), diff = p.xp ? Math.round((w.xp - p.xp) / p.xp * 100) : null;
+  const topA = Object.entries(w.at).sort((a, b) => b[1] - a[1])[0];
+  const du = S.duel && S.duel.week === wk ? S.duel : null;
+  const cards = [['XP', w.xp], ['Km', fmtKm(w.km)], ['Misiones', w.mis], ['Lugares nuevos', w.disc], ['Hallazgos', w.finds], ['Paseos con Vaca', w.walks], ['Días entrenados', w.train], ['Fe', w.fe + ' momento' + (w.fe === 1 ? '' : 's')]];
+  return `<p class="mute">Semana del ${fmtDay(w.ds[0])} al ${fmtDay(w.ds[6])}</p>
+    <div class="grid">${cards.map(([k, v]) => `<div class="st"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
+    <h3>Lo destacado</h3><ul class="dl">
+      ${diff != null ? `<li class="de"><b>${diff >= 0 ? `Sumaste ${diff}% más XP que la semana pasada` : `Sumaste ${-diff}% menos XP que la semana pasada`}</b></li>` : ''}
+      ${w.best && w.best[1] ? `<li class="de"><b>Tu mejor día fue el ${new Date(w.best[0] + 'T12:00').toLocaleDateString('es-AR', { weekday: 'long' })}</b><small>${w.best[1]} XP</small></li>` : ''}
+      ${topA ? `<li class="de"><b>Lo que más creció: ${D.ATTR[topA[0]]}</b><small>+${topA[1]} XP</small></li>` : ''}
+      ${w.note ? `<li class="de"><b>Momento de la semana</b><p class="dn">${esc(w.note.note)}</p><small>${esc(w.note.txt)}</small></li>` : ''}
+      ${du ? `<li class="de"><b>Duelo: ${duelPts()} puntos${du.rival ? ` contra ${esc(du.rival.n)}` : ''}</b></li>` : ''}
+    </ul>`;
+}
+function sundayCheck() {
+  const n = new Date(), wk = weekKey(n);
+  if (n.getDay() !== 0 || n.getHours() < 19 || S.sumShown === wk || busy() || !$('#pop').hidden) return;
+  S.sumShown = wk; saveLocal();
+  showPop(`<span class="pk">Domingo</span><b>Tu semana está lista</b><small>Tocá para ver el resumen</small>`, 15000, () => { hidePop(); setTab('resumen'); });
+}
+
+/* ---------- mapa de calor del mes ---------- */
+const HC = 0.0006;
+const monthKey = () => today().slice(0, 7);
+function heatAdd(ll) { const m = monthKey(), k = Math.floor(ll[0] / HC) + ':' + Math.floor(ll[1] / HC); S.heat[m] = S.heat[m] || {}; S.heat[m][k] = (S.heat[m][k] || 0) + 1; }
+const heatLayer = L.layerGroup();
+let heatOn = false;
+function heatToggle(on) {
+  heatOn = on; heatLayer.clearLayers();
+  if (!on) { if (map.hasLayer(heatLayer)) map.removeLayer(heatLayer); hidePop(); return; }
+  const H = S.heat[monthKey()] || {}, vals = Object.values(H), mx = Math.max(1, ...vals);
+  for (const [k, v] of Object.entries(H)) {
+    const [a, b] = k.split(':').map(Number), r = v / mx;
+    L.rectangle([[a * HC, b * HC], [(a + 1) * HC, (b + 1) * HC]], { stroke: false, fillColor: r > .66 ? '#ff3b1f' : r > .33 ? '#ff9d1f' : '#ffd23f', fillOpacity: .25 + r * .45, interactive: false }).addTo(heatLayer);
+  }
+  heatLayer.addTo(map); setTab('mapa');
+  showPop(`<span class="pk">Mapa de calor</span><b>${new Date().toLocaleDateString('es-AR', { month: 'long' })}: ${vals.length} cuadras caminadas</b><small>Tocá para ocultarlo</small>`, 0, () => heatToggle(false));
+}
+
+/* ---------- copia en la nube (Gist privado propio) ---------- */
+const CLOUD_FILE = 'lifebgood-save.json';
+let cloudT = null, cloudBusy = false, cloudPulled = false;
+const cloudOn = () => !demo && !!fxToken();
+function cloudSoon() { if (!cloudOn() || !cloudPulled) return; clearTimeout(cloudT); cloudT = setTimeout(() => cloudPush(false), 60000); }
+function cloudPayload() { const c = JSON.parse(JSON.stringify(S)); c.poi = null; c.fx.token = ''; return JSON.stringify({ v: 1, app: 'Lifebgood', updatedAt: S.upd || 0, state: c }); }
+async function cloudGist() {
+  if (S.cloud.gist) return S.cloud.gist;
+  for (let p = 1; p <= 3; p++) {
+    const L0 = await ghApi(`/gists?per_page=100&page=${p}`);
+    const g = L0.find(x => x.files && x.files[CLOUD_FILE]);
+    if (g) { S.cloud.gist = g.id; saveLocal(); return g.id; }
+    if (L0.length < 100) break;
+  }
+  const g = await ghApi('/gists', { method: 'POST', body: JSON.stringify({ description: 'Lifebgood: copia del progreso (no borrar)', public: false, files: { [CLOUD_FILE]: { content: cloudPayload() } } }) });
+  S.cloud.gist = g.id; S.cloud.last = Date.now(); saveLocal(); return g.id;
+}
+const cloudErr = e => e.status === 401 ? 'El token no sirve o se venció' : e.status === 403 || e.status === 404 ? 'El token no tiene permiso de "gist"' : 'Sin conexión con GitHub';
+async function cloudPush(inter) {
+  if (!cloudOn() || cloudBusy) return; cloudBusy = true; clearTimeout(cloudT); cloudT = null;
+  try {
+    const id = await cloudGist();
+    await ghApi('/gists/' + id, { method: 'PATCH', body: JSON.stringify({ files: { [CLOUD_FILE]: { content: cloudPayload() } } }) });
+    S.cloud.last = Date.now(); S.cloud.err = ''; saveLocal(); if (inter) toast('Progreso guardado en la nube');
+  } catch (e) { S.cloud.err = cloudErr(e); saveLocal(); if (inter) toast(S.cloud.err); }
+  cloudBusy = false; if (tab === 'stats') renderSheet();
+}
+async function cloudPull(inter) {
+  if (!cloudOn() || cloudBusy) return; cloudBusy = true;
+  try {
+    const id = await cloudGist(), g = await ghApi('/gists/' + id), f = g.files[CLOUD_FILE];
+    const r = f ? JSON.parse(f.truncated ? await (await fetch(f.raw_url)).text() : f.content) : null;
+    cloudPulled = true;
+    // primera vez en este aparato: gana la copia con más progreso (así un celu nuevo no pisa todo)
+    const first = !S.cloud.synced, takeRemote = r && r.state && (first ? (r.state.xp || 0) > (S.xp || 0) : (r.updatedAt || 0) > (S.upd || 0));
+    S.cloud.synced = true; saveLocal();
+    if (takeRemote) {
+      const keep = { token: S.fx.token, poi: S.poi, cloud: S.cloud, walkOn: S.walkOn, act: S.act };
+      S = Object.assign(blank(), r.state); norm();
+      S.fx.token = keep.token; S.poi = keep.poi; S.cloud = keep.cloud; S.cloud.synced = true; S.upd = r.updatedAt;
+      if (keep.walkOn && !S.walkOn) S.walkOn = keep.walkOn; if (keep.act && !S.act) S.act = keep.act;
+      S.cloud.last = Date.now(); S.cloud.err = ''; saveLocal();
+      hud(); draw(); walkUI(); actUI(); renderSheet(); toast('Traje tu progreso de la nube');
+    } else { cloudBusy = false; if (first || (S.upd || 0) > ((r && r.updatedAt) || 0)) await cloudPush(inter); else if (inter) toast('Ya estaba todo al día'); return; }
+  } catch (e) { S.cloud.err = cloudErr(e); saveLocal(); if (inter) toast(S.cloud.err); }
+  cloudBusy = false; if (tab === 'stats') renderSheet();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (cloudT) cloudPush(false); }
+  else { if (cloudOn() && Date.now() - (S.cloud.last || 0) > 5 * 60e3) cloudPull(false); setTimeout(() => { maybeAsk(); sundayCheck(); }, 4000); }
+});
+function vCloud() {
+  if (!fxToken()) return `<h3>Copia en la nube</h3><p class="mute">Se activa sola cuando conectás FUNVS (más abajo) con tu token de GitHub. Guarda todo tu progreso en un Gist privado y lo trae en cualquier aparato.</p>`;
+  return `<h3>Copia en la nube</h3><p class="mute">${S.cloud.err ? '⚠ ' + esc(S.cloud.err) : S.cloud.last ? 'Última copia: ' + ago(S.cloud.last) + '. Se guarda sola un minuto después de cada cambio.' : 'Todavía no se guardó.'}</p>
+    <div class="btns"><button class="ghost" id="clPush">Guardar ahora</button><button class="ghost" id="clPull">Traer de la nube</button></div>`;
+}
+
+/* ---------- modo 420 ---------- */
+function set420(on) {
+  if (on) document.documentElement.dataset.m420 = '1'; else delete document.documentElement.dataset.m420;
+  try { localStorage.setItem('lifebgood-420', on ? '1' : ''); } catch (e) { /* nada */ }
+  $('#m420').setAttribute('aria-pressed', on);
+  toast(on ? 'Modo 420 activado' : 'Volviste a la normalidad');
+}
 
 /* ---------- HUD ---------- */
 function hud() {
@@ -927,13 +1241,13 @@ function hud() {
 
 /* ---------- paneles ---------- */
 let tab = 'mapa';
-const TITLES = { misiones: 'Misiones', duelo: 'Duelo', diario: 'Diario', stats: 'Stats y logros' };
+const TITLES = { misiones: 'Misiones', duelo: 'Duelo', diario: 'Diario', stats: 'Stats y logros', album: 'Álbum', resumen: 'Resumen de la semana' };
 function setTab(t) {
   tab = t; dial(false);
   $('#sheet').hidden = t === 'mapa';
   $('#shTitle').textContent = TITLES[t] || '';
   document.querySelectorAll('.dial-it').forEach(b => b.classList.toggle('on', b.dataset.go === t));
-  if (t !== 'mapa') $('#sheet').scrollTop = 0;
+  if (t !== 'mapa') $('#sheet').scrollTop = 0; else setTimeout(() => showNext(false), 600);
   renderSheet();
 }
 /* menú que se despliega (FAB expandible) */
@@ -953,7 +1267,7 @@ function renderSheet() {
     return;
   }
   if (tab === 'duelo') duelPay();
-  $('#sheetBody').innerHTML = tab === 'stats' ? vStats() : tab === 'duelo' ? vDuelo() : vDiario();
+  $('#sheetBody').innerHTML = tab === 'stats' ? vStats() : tab === 'duelo' ? vDuelo() : tab === 'album' ? vAlbum() : tab === 'resumen' ? vResumen() : vDiario();
 }
 const leftToday = () => { const n = new Date(), m = new Date(n); m.setHours(24, 0, 0, 0); const s = (m - n) / 1000; return Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min'; };
 const ORD = { c: 0, r: 1, e: 2 };
@@ -977,21 +1291,27 @@ function vStats() {
   const { L } = lvl(S.xp);
   const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); const k = dayKey(d); return [d.toLocaleDateString('es-AR', { weekday: 'short' }), S.xpDay[k] || 0, S.kmDay[k] || 0]; });
   const mxd = Math.max(...days.map(d => d[1]));
-  const ACOL = { F: 'var(--coral)', U: 'var(--blue)', C: 'var(--mint)', R: 'var(--cyan)' };
+  const ACOL = ACOLS;
   const mxa = Math.max(...Object.values(S.at));
   const bt = count('type'), br = count('rar');
   const mxt = Math.max(0, ...Object.values(bt));
   const si = streakInfo();
   const cards = [['Nivel', L], ['XP total', S.xp], ['Km caminados', fmtKm(S.km)], ['Misiones', S.log.filter(x => x.type !== 'disc' && x.type !== 'find').length], ['Hallazgos', S.log.filter(x => x.type === 'find').length], ['Lugares descubiertos', Object.keys(S.disc).length], ['Zonas pisadas', Object.keys(S.cells).length], ['Racha', si.n === 1 ? '1 día' : si.n + ' días'], ['Escudo de racha', si.shieldUsed ? 'Usado' : 'Disponible'], ['De tu agenda', S.log.filter(x => x.type === 'agenda').length], ['Vencidas', S.expired]];
   return `<h2>Estadísticas</h2>
+  ${vFicha()}
+  <div class="btns" style="margin-top:14px"><button class="ghost" id="goRes">Resumen de la semana</button><button class="ghost" id="heatBtn">${heatOn ? 'Ocultar mapa de calor' : 'Mapa de calor del mes'}</button></div>
+  <h3>Números</h3>
   <div class="grid">${cards.map(([k, v]) => `<div class="st"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
   <p class="mute" style="margin-top:8px">El escudo te cubre un día sin XP por semana para que no se corte la racha. Se recarga cada lunes.</p>
   ${vDisc()}
   ${vVaca()}
+  ${S.vtrain.ses.length ? `<h3>Adiestramiento</h3>${vtStats().map(([n, st, c]) => `<div class="row"><span>${esc(n)}</span><div class="bar" style="--c:var(--gold)"><i style="width:${st / 5 * 100}%"></i></div><span>${'★'.repeat(st)}${'☆'.repeat(5 - st)} · ${c}</span></div>`).join('')}` : ''}
+  <button class="ghost" id="vtOpen">Anotar adiestramiento de Vaca</button>
   <h3>Últimos 7 días</h3>${rows(days.map(([l, x, k]) => [l, x, x + ' XP · ' + fmtKm(k)]), mxd, 'var(--coral)')}
   <h3>Atributos</h3>${Object.keys(D.ATTR).map(k => `<div class="row"><span>${D.ATTR[k]}</span><div class="bar" style="--c:${ACOL[k]}"><i style="width:${mxa ? (S.at[k] || 0) / mxa * 100 : 0}%"></i></div><span>${S.at[k] || 0} XP</span></div>`).join('')}
   <h3>Por tipo de lugar</h3>${rows(Object.keys(D.TYPES).map(k => [D.TYPES[k].n, bt[k] || 0, (bt[k] || 0) + ' misiones']), mxt, 'var(--blue)')}
   <h3>Por rareza</h3><p class="mute">Comunes ${br.c || 0} · Raras ${br.r || 0} · Épicas ${br.e || 0}</p>
+  ${vCloud()}
   ${vGcal()}
   ${vFunvs()}
   <h3>Skin</h3><div class="btns">${[['clasica', 'Clásica'], ['hacker', 'Hacker']].map(([k, n]) => `<button class="ghost skin" data-skin="${k}" aria-pressed="${(document.documentElement.dataset.skin || 'clasica') === k}">${n}</button>`).join('')}</div>
@@ -1043,12 +1363,14 @@ function toast(msg) { const e = $('#toast'); e.textContent = msg; e.classList.ad
 document.addEventListener('click', async e => {
   if (e.target.id === 'modal') return closeModal();
   if (e.target.id === 'dialBg') return dial(false);
+  if (e.target.closest('#pop') && !e.target.closest('button')) { if (popAct) popAct(); else hidePop(); return; }
   const b = e.target.closest('button');
   if (!b) return;
   if (b.dataset.tab) return setTab(b.dataset.tab);
   if (b.dataset.go) {
     const g = b.dataset.go; dial(false);
     if (g === 'walk') return S.walkOn ? toast('Ya hay un paseo en curso: terminalo desde la barra de arriba') : walkMenu();
+    if (g === 'doing') return askDoing(true);
     if (g === 'nueva') { setTab('misiones'); setTimeout(() => { const i = $('#qaIn'); if (i) i.focus(); }, 50); return; }
     return setTab(tab === g ? 'mapa' : g);
   }
@@ -1056,6 +1378,12 @@ document.addEventListener('click', async e => {
   if (b.dataset.skin) return setSkin(b.dataset.skin);
   if (b.dataset.done) return completeTask(b.dataset.done);
   if (b.dataset.note) { $('#snack').hidden = true; return askNote(+b.dataset.note); }
+  if (b.dataset.act) return startAct(b.dataset.act);
+  if (b.dataset.cruz != null) return cruz(b.dataset.cruz);
+  if (b.dataset.vt) { hidePop(); return b.dataset.vt === '1' ? vacaTrain() : null; }
+  if (b.dataset.vtt) { const k = b.dataset.vtt; vtSel.has(k) ? vtSel.delete(k) : vtSel.add(k); b.setAttribute('aria-pressed', vtSel.has(k)); return; }
+  if (b.dataset.vtr) { vtR = +b.dataset.vtr; document.querySelectorAll('[data-vtr]').forEach(x => x.setAttribute('aria-pressed', x === b)); return; }
+  if (b.dataset.temp) { const cur = new Set((S.temper || '').split('+').filter(Boolean)), k = b.dataset.temp; if (cur.has(k)) cur.delete(k); else { if (cur.size >= 2) cur.delete([...cur][0]); cur.add(k); } S.temper = [...cur].join('+'); save(); renderSheet(); return; }
   if (b.dataset.wmin) { document.querySelectorAll('[data-wmin]').forEach(x => x.setAttribute('aria-pressed', x === b)); return; }
   if (b.dataset.del) return removeTask(b.dataset.del);
   if (b.dataset.tkind) return cycleTask(b.dataset.tkind, 'kind');
@@ -1075,7 +1403,27 @@ document.addEventListener('click', async e => {
     case 'shClose': setTab('mapa'); break;
     case 'walkMenu2': walkMenu(); break;
     case 'walkGo': startWalk(); break;
-    case 'fxSave': { const v = ($('#fxTok').value || '').trim(); if (!/^(ghp_|github_pat_|gho_)/.test(v)) { toast('Eso no parece un token de GitHub'); break; } S.fx.token = v; S.fx.gist = null; save(); renderSheet(); fxPush(true); break; }
+    case 'actEnd': endAct(false); break;
+    case 'actX': if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = '¿Seguro?'; setTimeout(() => { b.textContent = 'Descartar'; delete b.dataset.sure; }, 3000); break; } endAct(true); break;
+    case 'm420': set420(!document.documentElement.dataset.m420); break;
+    case 'pop': if (popAct) popAct(); break;
+    case 'clPush': cloudPush(true); break;
+    case 'clPull': cloudPull(true); break;
+    case 'goRes': setTab('resumen'); break;
+    case 'heatBtn': heatToggle(!heatOn); break;
+    case 'vtOpen': vacaTrain(); break;
+    case 'vtAdd': { const v = ($('#vtNew').value || '').trim(); if (!v) break; const id = 't' + uid(); S.vtrain.tricks.push({ id, n: v.slice(0, 40) }); save(); vtSel.add(id); const c = document.createElement('button'); c.type = 'button'; c.className = 'tag tb'; c.dataset.vtt = id; c.setAttribute('aria-pressed', 'true'); c.textContent = v; $('#vtT').appendChild(c); $('#vtNew').value = ''; break; }
+    case 'vtSave': {
+      if (!vtSel.size) { toast('Elegí al menos un truco'); break; }
+      S.vtrain.ses.push({ d: today(), t: Date.now(), tricks: [...vtSel], r: vtR });
+      const names = S.vtrain.tricks.filter(t => vtSel.has(t.id)).map(t => t.n).join(', ');
+      closeModal(); const g = grant(20 * xpMult(), 'C', { type: 'vtrain', txt: 'Adiestramiento de Vaca: ' + names });
+      toast(g.up ? `¡Subiste a nivel ${g.up}!` : `Sesión anotada · +${20 * xpMult()} XP`); offerNote(g.i); break;
+    }
+    case 'kgSave': { const v = parseFloat(($('#kgIn').value || '').replace(',', '.')); if (!(v >= 30 && v <= 250)) { toast('Poné un peso válido en kg'); break; } const t = today(); S.body.w = S.body.w.filter(x => x.d !== t); S.body.w.push({ d: t, kg: Math.round(v * 10) / 10 }); save(); $('#kgIn').blur(); renderSheet(); toast('Peso anotado'); break; }
+    case 'alRen': { const el = document.querySelector('.alname'); el.outerHTML = `<input id="alIn" class="alname-in" value="${esc(S.album)}" maxlength="30" aria-label="Nombre del álbum">`; b.id = 'alOk'; b.textContent = 'Listo'; $('#alIn').focus(); break; }
+    case 'alOk': { const v = ($('#alIn').value || '').trim(); if (v) S.album = v; save(); $('#alIn').blur(); renderSheet(); break; }
+    case 'fxSave': { const v = ($('#fxTok').value || '').trim(); if (!/^(ghp_|github_pat_|gho_)/.test(v)) { toast('Eso no parece un token de GitHub'); break; } S.fx.token = v; S.fx.gist = null; save(); renderSheet(); fxPush(true); cloudPulled = false; cloudPull(false).then(() => { cloudPulled = true; }); break; }
     case 'fxSend': fxPush(true); break;
     case 'fxForget': S.fx.token = ''; S.fx.gist = null; save(); renderSheet(); toast('Token quitado'); break;
     case 'walkEnd': finishWalk(false); break;
@@ -1153,16 +1501,21 @@ document.addEventListener('input', e => {
   if (e.target.dataset.dnote && S.duel) { S.duel.notes[e.target.dataset.dnote] = e.target.value; save(); }
 });
 document.addEventListener('change', e => { if (e.target.dataset.dnote) { e.target.blur(); duelPay(); renderSheet(); } });
-document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (openM || noteIdx != null) closeModal(); else if (!$('#dialList').hidden) dial(false); else if (tab !== 'mapa') setTab('mapa'); });
+document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (!$('#pop').hidden) return hidePop(); if (openM || noteIdx != null) closeModal(); else if (!$('#dialList').hidden) dial(false); else if (tab !== 'mapa') setTab('mapa'); });
 
 setInterval(() => { if (hold) tickHold(); }, 250);
-setInterval(() => { if (S.walkOn) walkUI(); }, 1000);
+setInterval(() => { if (S.walkOn) walkUI(); if (S.act) actUI(); }, 1000);
+setInterval(() => { showNext(false); maybeAsk(); sundayCheck(); }, 15 * 60e3);
 let lastSlot = Math.floor(Date.now() / SLOT);
 setInterval(() => { dayCheck(); velezDay(); hud(); if (Math.floor(Date.now() / SLOT) !== lastSlot) { lastSlot = Math.floor(Date.now() / SLOT); draw(); } if (tab === 'misiones') renderSheet(); }, 60000);
 
 /* ---------- arranque ---------- */
 if (hacker()) document.querySelector('meta[name=theme-color]').content = '#020a04';
-hud(); dayCheck(); velezDay(); draw(); walkUI(); if (S.walkOn) keepAwake(true);
+hud(); dayCheck(); velezDay(); draw(); walkUI(); actUI(); if (S.walkOn) keepAwake(true);
+try { if (localStorage.getItem('lifebgood-420')) { document.documentElement.dataset.m420 = '1'; $('#m420').setAttribute('aria-pressed', 'true'); } } catch (e) { /* nada */ }
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+setTimeout(() => { if (cloudOn()) cloudPull(false); else cloudPulled = true; }, 1500);
+setTimeout(() => { showNext(false); setTimeout(() => { maybeAsk(); sundayCheck(); }, 9000); }, 6000);
 if (S.gcal.cid && gTok) syncCal(false);
 if (location.hash === '#demo') startDemo();
 else if (S.intro) startGPS();
