@@ -110,6 +110,38 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--coral);outline-
 /* selector de skin */
 .ghost.skin[aria-pressed=true]{border-color:var(--coral);color:var(--coral);font-weight:600}
 
+/* agenda: carga rápida y tus misiones */
+.h2b{margin-top:24px}
+#qa{display:flex;gap:8px;margin:8px 0}
+#qa input,.row2 input{flex:1;min-height:50px;padding:0 12px;border-radius:12px;border:2px solid rgba(255,255,255,.4);background:var(--cob2);color:var(--ink);font:16px Rubik,system-ui,sans-serif}
+#qa input::placeholder,.row2 input::placeholder{color:var(--mute)}
+.qabtn{min-height:50px;padding:0 16px;border-radius:12px;border:2px solid #fff;background:var(--coral);color:#fff;font-weight:600;cursor:pointer;flex:none}
+.qahelp{font-size:13px;color:var(--mute);margin:4px 0 8px}
+.tags{display:flex;flex-wrap:wrap}
+.tag.tb{background:none;color:var(--ink);cursor:pointer;min-height:36px;padding:4px 10px;font:inherit;font-size:13px}
+.tag.k-p{border-color:var(--coral);color:var(--coral)}
+.tag.k-d{border-color:var(--gold);color:var(--gold)}
+.agl{list-style:none;margin:0 0 6px;padding:0;display:grid;gap:8px}
+.ag{display:grid;grid-template-columns:4.2em minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--cob2);border-radius:12px;padding:10px;border-left:4px solid var(--grey)}
+.ag.k-p{border-left-color:var(--coral)}.ag.k-d{border-left-color:var(--gold)}
+.ag.done{opacity:.62}.ag.done b{text-decoration:line-through}
+.agt{font:700 20px 'Pixelify Sans',monospace;white-space:nowrap}
+.agt small{display:block;font:500 13px Rubik,sans-serif;color:var(--mute)}
+.agb b{display:block;font-weight:600;margin-bottom:4px}
+.agac{display:flex;gap:6px}
+.agdo{min-height:44px;padding:0 14px;border-radius:10px;border:2px solid var(--mint);background:none;color:var(--mint);font-weight:600;cursor:pointer}
+.agx{min-width:44px;min-height:44px;border-radius:10px;border:2px solid rgba(255,255,255,.25);background:none;color:var(--mute);font-size:20px;cursor:pointer}
+.agok{font:700 26px 'Pixelify Sans',monospace;color:var(--mint);padding:0 8px}
+.ghost.slim{min-height:44px;margin:0 0 10px}
+.row2{display:flex;gap:8px}.row2 .ghost{margin-top:0;width:auto;padding:0 16px}
+#gwrite[aria-pressed=true]{border-color:var(--mint);color:var(--mint)}
+@media(max-width:420px){.ag{grid-template-columns:3.4em minmax(0,1fr)}.agac,.agok{grid-column:2}}
+:root[data-skin=hacker] #qa input,:root[data-skin=hacker] .row2 input{border-radius:4px;border-color:var(--grey);font-family:'Share Tech Mono',monospace;caret-color:var(--coral)}
+:root[data-skin=hacker] .qabtn{border-radius:4px;border-color:var(--coral);color:#001a08;box-shadow:var(--glow)}
+:root[data-skin=hacker] .ag{border-radius:4px;border:1px solid var(--grey);border-left-width:4px}
+:root[data-skin=hacker] .agt{font-family:'VT323',monospace;font-size:26px;color:var(--coral)}
+:root[data-skin=hacker] .agdo,:root[data-skin=hacker] .agx{border-radius:4px}
+
 /* ================= SKIN HACKER =================
    terminal verde sobre negro, mapa en modo noche, letra de consola y líneas de monitor */
 :root[data-skin=hacker]{--cob:#020a04;--cob2:#06170b;--cob3:#0b2414;--coral:#00ff66;--mint:#39ff88;--blue:#00e5ff;--cyan:#7dffb0;--gold:#d4ff00;--ink:#b6ffcb;--mute:#3fbf6a;--grey:#0f3a1d;--glow:0 0 6px rgba(0,255,102,.55)}
@@ -174,3 +206,4 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--coral);outline-
 /* líneas de monitor CRT sobre todo */
 :root[data-skin=hacker] body::after{content:'';position:fixed;inset:0;z-index:5000;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
 @media(prefers-reduced-motion:reduce){:root[data-skin=hacker] .nm::after{animation:none}}
+@media(max-width:420px){:root[data-skin=hacker] .ag{grid-template-columns:4.6em minmax(0,1fr)}}
