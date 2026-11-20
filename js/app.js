@@ -30,10 +30,10 @@ const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0, 
   body: { h: 177, w: [{ d: '2026-11-20', kg: 84 }], tdays: { '2026-11-19': 1 } },
   cloud: { gist: null, last: 0, err: '' },
   vtrain: { tricks: [{ id: 'circuito', n: 'Circuito en el patio' }, { id: 'kong', n: 'Buscar el Kong olfateando' }], ses: [] },
-  heat: {}, act: null, lastAsk: 0, temper: '', album: 'Monte Grande', sumShown: '', upd: 0 });
+  heat: {}, act: null, lastAsk: 0, temper: '', mood: {}, album: 'Monte Grande', sumShown: '', upd: 0 });
 let S = blank();
 function load() { S = blank(); try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(blank(), JSON.parse(r)); } catch (e) { /* sin almacenamiento */ } norm(); }
-function norm() { const B = blank(); S.at = Object.assign({}, B.at, S.at); for (const k of ['fe', 'body', 'cloud', 'vtrain', 'heat']) S[k] = Object.assign({}, B[k], S[k]); }
+function norm() { const B = blank(); S.at = Object.assign({}, B.at, S.at); for (const k of ['fe', 'body', 'cloud', 'vtrain', 'heat', 'mood']) S[k] = Object.assign({}, B[k], S[k]); }
 load();
 const saveLocal = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* lleno o bloqueado */ } };
 const save = () => { S.upd = Date.now(); saveLocal(); cloudSoon(); };
@@ -940,7 +940,22 @@ function showPop(html, ms, onTap) {
   popAct = onTap || null;
   clearTimeout(popT); if (ms) popT = setTimeout(hidePop, ms);
 }
-function hidePop() { const el = $('#pop'); el.classList.add('out'); clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; }, 250); }
+function hidePop() { const el = $('#pop'); el.classList.add('out'); clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; el.style.transform = ''; el.style.opacity = ''; }, 250); }
+// deslizar para ocultar (a los costados o hacia abajo)
+let sw = null, swMoved = false;
+$('#pop').addEventListener('pointerdown', e => { if (e.target.closest('button')) return; sw = { x: e.clientX, y: e.clientY }; swMoved = false; $('#pop').style.transition = 'none'; });
+window.addEventListener('pointermove', e => {
+  if (!sw) return;
+  const dx = e.clientX - sw.x, dy = Math.max(0, e.clientY - sw.y);
+  if (Math.abs(dx) > 6 || dy > 6) swMoved = true;
+  const el = $('#pop'); el.style.transform = `translate(${dx}px, ${dy}px)`; el.style.opacity = String(Math.max(.2, 1 - (Math.abs(dx) + dy) / 220));
+});
+window.addEventListener('pointerup', e => {
+  if (!sw) return;
+  const dx = e.clientX - sw.x, dy = e.clientY - sw.y, el = $('#pop'); sw = null; el.style.transition = '';
+  if (Math.abs(dx) > 70 || dy > 45) { el.style.transform = `translate(${dx > 0 ? 400 : dx < 0 ? -400 : 0}px, ${dy > 45 ? 200 : 0}px)`; el.style.opacity = '0'; clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; el.style.transform = ''; el.style.opacity = ''; }, 220); }
+  else { el.style.transform = ''; el.style.opacity = ''; }
+});
 const busy = () => !$('#modal').hidden || !$('#dialList').hidden;
 
 /* próxima misión: la de la agenda que viene, o la más cercana del mapa */
@@ -956,18 +971,19 @@ function nextUp() {
 }
 let lastNext = 0;
 function showNext(force) {
-  if (!force && (tab !== 'mapa' || busy() || !$('#pop').hidden || Date.now() - lastNext < 3 * 60e3)) return;
+  if (!force && (tab !== 'mapa' || busy() || !$('#pop').hidden || Date.now() - lastNext < 40 * 60e3)) return;
   const n = nextUp(); if (!n) return;
   lastNext = Date.now();
   showPop(`<span class="pk">Próxima misión</span><b>${esc(n.title)}</b><small>${esc(n.sub)}</small>`, 7000, () => { hidePop(); if (n.kind === 'map') openMission(n.id); else setTab('misiones'); });
 }
 const nearSeen = {};
-function nearCheck() { // te avisa cuando pasás cerca de una misión
-  if (!pos || busy()) return;
+let lastNear = 0;
+function nearCheck() { // te avisa cuando pasás cerca de una misión (como mucho cada media hora)
+  if (!pos || busy() || !$('#pop').hidden || Date.now() - lastNear < 30 * 60e3) return;
   for (const m of S.missions) {
     if (m.st !== 'open' || nearSeen[m.id]) continue;
     const d = dist(pos.ll, m.ll);
-    if (d < 150) { nearSeen[m.id] = 1; showPop(`<span class="pk">Estás cerca</span><b>${esc(m.txt)}</b><small>${esc(m.name || D.TYPES[m.type].n)} · a ${fmtD(d)}</small>`, 8000, () => { hidePop(); openMission(m.id); }); return; }
+    if (d < 150) { nearSeen[m.id] = 1; lastNear = Date.now(); showPop(`<span class="pk">Estás cerca</span><b>${esc(m.txt)}</b><small>${esc(m.name || D.TYPES[m.type].n)} · a ${fmtD(d)}</small>`, 8000, () => { hidePop(); openMission(m.id); }); return; }
   }
 }
 
@@ -1051,7 +1067,9 @@ function cruz(id) {
 // base de cada atributo según lo que contaste (se suma lo que vas ganando)
 const ABASE = { F: 3, U: 7, C: 5, R: 5, E: 5 };
 const atLv = k => ABASE[k] + Math.floor(Math.sqrt((S.at[k] || 0) / 40));
-const TEMPS = { sanguineo: 'Sanguíneo', colerico: 'Colérico', melancolico: 'Melancólico', flematico: 'Flemático' };
+const MOODS = { 1: 'Muy mal', 2: 'Mal', 3: 'Normal', 4: 'Bien', 5: 'Excelente' };
+const MCOL = { 1: '#e2392d', 2: '#ff9d1f', 3: '#aab5e8', 4: '#5fe0b0', 5: '#ffd23f' };
+const nowLabel = () => { const n = new Date(); const d = n.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', ''); return d.charAt(0).toUpperCase() + d.slice(1) + ' · ' + nowHM(); };
 const lastW = () => S.body.w.length ? S.body.w[S.body.w.length - 1] : null;
 const imc = () => { const w = lastW(); return w ? w.kg / ((S.body.h / 100) ** 2) : null; };
 function vFicha() {
@@ -1061,8 +1079,9 @@ function vFicha() {
   <div class="ficha">${Object.keys(D.ATTR).map(k => `<div class="fat"><span>${D.ATTR[k]}</span><b style="color:${ACOLS[k]}">${atLv(k)}</b></div>`).join('')}</div>
   <p class="mute">Nivel de cada atributo: una base según lo que me contaste (arrancás con Fuerza 3, día 2 de entrenamiento) más lo que vas ganando.</p>
   <div class="row"><span>Fe</span><div class="bar" style="--c:var(--gold)"><i style="width:${fe}%"></i></div><span>${fe}% · ${S.fe.visits || 0} visita${S.fe.visits === 1 ? '' : 's'}</span></div>
-  <h3>Temperamento</h3><div class="tags">${Object.entries(TEMPS).map(([k, n]) => `<button type="button" class="tag tb" data-temp="${k}" aria-pressed="${(S.temper || '').split('+').includes(k)}">${n}</button>`).join('')}</div>
-  <p class="mute">Podés marcar uno o dos (mezcla).</p>
+  <h3>Cómo me siento hoy</h3><p class="when" id="whenNow">${nowLabel()}</p>
+  <div class="moods">${Object.entries(MOODS).map(([k, n]) => `<button type="button" class="mood" data-mood="${k}" aria-pressed="${S.mood[today()] === +k}" style="--m:${MCOL[k]}"><b>${k}</b><span>${n}</span></button>`).join('')}</div>
+  <div class="mweek">${[...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); const v = S.mood[dayKey(d)]; return `<div><i style="height:${v ? v * 8 : 3}px;background:${v ? MCOL[v] : 'rgba(255,255,255,.15)'}"></i><small>${d.toLocaleDateString('es-AR', { weekday: 'narrow' })}</small></div>`; }).join('')}</div>
   <h3>Cuerpo</h3>
   <div class="grid"><div class="st"><span>Altura</span><b>${(S.body.h / 100).toLocaleString('es-AR')} m</b></div><div class="st"><span>Peso</span><b>${w ? w.kg.toLocaleString('es-AR') + ' kg' : '—'}</b></div>
   <div class="st"><span>IMC</span><b>${i ? i.toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—'}</b></div><div class="st"><span>Días entrenados</span><b>${td}</b></div></div>
@@ -1126,7 +1145,8 @@ function vResumen() {
   const p = weekStats(dayKey(prev)), diff = p.xp ? Math.round((w.xp - p.xp) / p.xp * 100) : null;
   const topA = Object.entries(w.at).sort((a, b) => b[1] - a[1])[0];
   const du = S.duel && S.duel.week === wk ? S.duel : null;
-  const cards = [['XP', w.xp], ['Km', fmtKm(w.km)], ['Misiones', w.mis], ['Lugares nuevos', w.disc], ['Hallazgos', w.finds], ['Paseos con Vaca', w.walks], ['Días entrenados', w.train], ['Fe', w.fe + ' momento' + (w.fe === 1 ? '' : 's')]];
+  const mv = w.ds.map(d => S.mood[d]).filter(Boolean), mavg = mv.length ? mv.reduce((a, b) => a + b, 0) / mv.length : null;
+  const cards = [['XP', w.xp], ['Km', fmtKm(w.km)], ['Ánimo promedio', mavg ? MOODS[Math.round(mavg)] : '—'], ['Misiones', w.mis], ['Lugares nuevos', w.disc], ['Hallazgos', w.finds], ['Paseos con Vaca', w.walks], ['Días entrenados', w.train], ['Fe', w.fe + ' momento' + (w.fe === 1 ? '' : 's')]];
   return `<p class="mute">Semana del ${fmtDay(w.ds[0])} al ${fmtDay(w.ds[6])}</p>
     <div class="grid">${cards.map(([k, v]) => `<div class="st"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
     <h3>Lo destacado</h3><ul class="dl">
@@ -1363,7 +1383,7 @@ function toast(msg) { const e = $('#toast'); e.textContent = msg; e.classList.ad
 document.addEventListener('click', async e => {
   if (e.target.id === 'modal') return closeModal();
   if (e.target.id === 'dialBg') return dial(false);
-  if (e.target.closest('#pop') && !e.target.closest('button')) { if (popAct) popAct(); else hidePop(); return; }
+  if (e.target.closest('#pop') && !e.target.closest('button')) { if (swMoved) { swMoved = false; return; } if (popAct) popAct(); else hidePop(); return; }
   const b = e.target.closest('button');
   if (!b) return;
   if (b.dataset.tab) return setTab(b.dataset.tab);
@@ -1383,7 +1403,7 @@ document.addEventListener('click', async e => {
   if (b.dataset.vt) { hidePop(); return b.dataset.vt === '1' ? vacaTrain() : null; }
   if (b.dataset.vtt) { const k = b.dataset.vtt; vtSel.has(k) ? vtSel.delete(k) : vtSel.add(k); b.setAttribute('aria-pressed', vtSel.has(k)); return; }
   if (b.dataset.vtr) { vtR = +b.dataset.vtr; document.querySelectorAll('[data-vtr]').forEach(x => x.setAttribute('aria-pressed', x === b)); return; }
-  if (b.dataset.temp) { const cur = new Set((S.temper || '').split('+').filter(Boolean)), k = b.dataset.temp; if (cur.has(k)) cur.delete(k); else { if (cur.size >= 2) cur.delete([...cur][0]); cur.add(k); } S.temper = [...cur].join('+'); save(); renderSheet(); return; }
+  if (b.dataset.mood) { S.mood[today()] = +b.dataset.mood; save(); renderSheet(); toast('Anotado: hoy ' + MOODS[b.dataset.mood].toLowerCase()); return; }
   if (b.dataset.wmin) { document.querySelectorAll('[data-wmin]').forEach(x => x.setAttribute('aria-pressed', x === b)); return; }
   if (b.dataset.del) return removeTask(b.dataset.del);
   if (b.dataset.tkind) return cycleTask(b.dataset.tkind, 'kind');
@@ -1504,8 +1524,8 @@ document.addEventListener('change', e => { if (e.target.dataset.dnote) { e.targe
 document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (!$('#pop').hidden) return hidePop(); if (openM || noteIdx != null) closeModal(); else if (!$('#dialList').hidden) dial(false); else if (tab !== 'mapa') setTab('mapa'); });
 
 setInterval(() => { if (hold) tickHold(); }, 250);
-setInterval(() => { if (S.walkOn) walkUI(); if (S.act) actUI(); }, 1000);
-setInterval(() => { showNext(false); maybeAsk(); sundayCheck(); }, 15 * 60e3);
+setInterval(() => { if (S.walkOn) walkUI(); if (S.act) actUI(); const w = $('#whenNow'); if (w) w.textContent = nowLabel(); }, 1000);
+setInterval(() => { showNext(false); maybeAsk(); sundayCheck(); }, 20 * 60e3);
 let lastSlot = Math.floor(Date.now() / SLOT);
 setInterval(() => { dayCheck(); velezDay(); hud(); if (Math.floor(Date.now() / SLOT) !== lastSlot) { lastSlot = Math.floor(Date.now() / SLOT); draw(); } if (tab === 'misiones') renderSheet(); }, 60000);
 

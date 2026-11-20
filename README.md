@@ -17,10 +17,10 @@ Misiones en la vida real sobre el mapa de tu barrio. Cada día aparecen misiones
 - **Hallazgos**: cada 30 minutos aparecen cosas cerca tuyo (bolsas de vaccoins, energía, cofres y, a veces, sobres de Vaca o de Vélez). Se agarran solas al pasar caminando. Hasta 25 por día.
 - **Conexión con FUNVS**: los vaccoins de hallazgos y niveles (50 por nivel), los sobres y los paseos de Vaca van a tu Colección de FUNVS. Lifebgood escribe `lifebgood.json` en el mismo Gist privado de la Colección y FUNVS lo lee al sincronizar (cada cosa entra una sola vez; tope de 60 vaccoins por día). Se conecta en Stats → FUNVS con el mismo token de GitHub de FUNVS (si FUNVS está abierto en el mismo navegador, lo toma solo).
 - **Menú**: todo se abre desde el botón de abajo a la derecha, que despliega las opciones.
-- **Aviso de próxima misión**: aparece arriba unos segundos (la próxima de tu agenda o la más cercana del mapa) y se va solo; también avisa cuando pasás cerca de una misión.
+- **Aviso de próxima misión**: aparece abajo al centro unos segundos (como mucho cada 40 min; se desliza para ocultarlo) (la próxima de tu agenda o la más cercana del mapa) y se va solo; también avisa cuando pasás cerca de una misión.
 - **¿Qué estás haciendo?**: el juego te pregunta cada tanto (o desde el menú → Estoy haciendo…). Entrenar, leer, un proyecto, charlar, ordenar o rezar arranca un cronómetro y suma a ese atributo (2 XP por minuto, hasta 120).
 - **Iglesias y Fe**: las iglesias aparecen en el mapa; al pasar por una, la app te propone hacer la señal de la cruz y recarga tu Fe. Fe es también un atributo.
-- **Ficha del personaje** (Stats): nivel de cada atributo, Fe, temperamento (elegís uno o dos), peso, IMC y días entrenados.
+- **Ficha del personaje** (Stats): nivel de cada atributo, Fe, "Cómo me siento hoy" (5 niveles, con el día y la hora arriba y la semana en barras), peso, IMC y días entrenados.
 - **Adiestramiento de Vaca**: trucos con estrellas según cómo les va; se ofrece al terminar de entrenar.
 - **Álbum del barrio**: cada lugar que descubrís se pega como estampa, por tipo, con medallas de bronce, plata y oro.
 - **Resumen del domingo**: el domingo a la noche te avisa que tu semana está lista.
