@@ -172,6 +172,24 @@ textarea{width:100%;font:16px Rubik,system-ui,sans-serif;color:var(--ink);backgr
 :root[data-skin=hacker] textarea,:root[data-skin=hacker] #dRival,:root[data-skin=hacker] #dCode,:root[data-skin=hacker] #dName{border-radius:4px;border-color:var(--grey);font-family:'Share Tech Mono',monospace;caret-color:var(--coral)}
 :root[data-skin=hacker] .code,:root[data-skin=hacker] .score b{font-family:'VT323',monospace;color:var(--coral);text-shadow:var(--glow)}
 
+/* paseos con Vaca */
+.fab-vaca{bottom:calc(136px + var(--sab));background:#fff}
+.vaca-ico{display:block;width:36px;height:26px}
+.vaca-in{width:31px;height:22px;filter:drop-shadow(0 2px 0 rgba(0,0,0,.4));animation:bob .6s steps(1) infinite}
+.vaca-big{width:112px;height:80px;margin:0 auto 4px}
+.walkbar{position:fixed;left:8px;right:8px;top:calc(96px + var(--sat));z-index:1040;display:flex;gap:8px;align-items:center;background:#b8642a;color:#fff;border:2px solid #fff;border-radius:14px;padding:6px 6px 6px 12px;box-shadow:0 4px 0 rgba(0,0,0,.3);font-weight:600;font-size:15px;max-width:520px;margin:0 auto}
+.walkbar span{flex:1;font-variant-numeric:tabular-nums}
+.walkbar button{min-height:44px;border-radius:10px;border:2px solid #fff;font-weight:600;cursor:pointer;padding:0 12px}
+.wend{background:#fff;color:#7a3d12}
+.wx2{background:transparent;color:#fff;font-size:13px}
+.tag.tb[aria-pressed=true]{background:var(--coral);border-color:var(--coral);color:#fff}
+#wHora{min-height:50px;padding:0 10px;border-radius:12px;border:2px solid rgba(255,255,255,.4);background:var(--cob2);color:var(--ink);font:16px Rubik,system-ui,sans-serif;color-scheme:dark}
+:root[data-skin=hacker] .fab-vaca{background:#020a04}
+:root[data-skin=hacker] .walkbar{background:#020a04;color:var(--coral);border-color:#d98a4a;border-radius:4px;box-shadow:0 0 8px rgba(217,138,74,.6);font-family:'Share Tech Mono',monospace}
+:root[data-skin=hacker] .walkbar button{border-radius:4px}
+:root[data-skin=hacker] .wend{background:#d98a4a;color:#020a04;border-color:#d98a4a}
+:root[data-skin=hacker] .tag.tb[aria-pressed=true]{color:#001a08}
+
 /* ================= SKIN HACKER =================
    terminal verde sobre negro, mapa en modo noche, letra de consola y líneas de monitor */
 :root[data-skin=hacker]{--cob:#020a04;--cob2:#06170b;--cob3:#0b2414;--coral:#00ff66;--mint:#39ff88;--blue:#00e5ff;--cyan:#7dffb0;--gold:#d4ff00;--ink:#b6ffcb;--mute:#3fbf6a;--grey:#0f3a1d;--glow:0 0 6px rgba(0,255,102,.55)}

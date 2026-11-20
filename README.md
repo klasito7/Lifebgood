@@ -10,6 +10,7 @@ Misiones en la vida real sobre el mapa de tu barrio. Cada día aparecen misiones
 - **Descubrir**: cada lugar del mapa (kiosco, plaza, panadería…) por el que pasás por primera vez queda en tu colección (+10 XP) y aparece como marcador verde. En Stats ves qué porcentaje de tu zona descubriste.
 - **Clima en vivo** (Open-Meteo): con lluvia las misiones de plaza esperan; con sol dan XP doble.
 - **Días de Vélez** (fixture de ESPN, el mismo que usa FUNVS): el día que juega, todo da XP doble y aparece la misión de ver el partido.
+- **Paseos con Vaca**: botón con Vaca en el mapa. Con GPS cuenta minutos y km (y mantiene la pantalla prendida); también se cargan a mano. Si en tu agenda había "pasear a Vaca", se marca sola. Estadísticas y logros propios.
 - **Escudo de racha**: un día sin XP por semana no te corta la racha. Se recarga cada lunes.
 - **Diario**: al cumplir una misión anotás qué pasó; queda todo en la pestaña Diario.
 - **Duelo semanal**: creás un código, se lo pasás a un amigo y los dos reciben los mismos 5 retos (2 que verifica la app y 3 donde la prueba es lo que escribís). Se pasan el resultado como código por WhatsApp y la app compara. Sin servidor.

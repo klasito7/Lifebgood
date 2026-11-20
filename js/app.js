@@ -25,7 +25,7 @@ const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Mat
 const lvl = xp => { let L = 1; while (xp >= 50 * L * (L + 1)) L++; return { L, lo: 50 * (L - 1) * L, hi: 50 * L * (L + 1) }; };
 
 /* ---------- estado (queda en este celu) ---------- */
-const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0 }, km: 0, kmDay: {}, xpDay: {}, log: [], visited: {}, cells: {}, day: null, missions: [], rerolls: 0, expired: 0, perfect: {}, poi: null, tasks: [], dailies: [], learn: {}, gcal: { cid: '', write: false, last: 0 }, disc: {}, wx: null, velez: null, duel: null });
+const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0 }, km: 0, kmDay: {}, xpDay: {}, log: [], visited: {}, cells: {}, day: null, missions: [], rerolls: 0, expired: 0, perfect: {}, poi: null, tasks: [], dailies: [], learn: {}, gcal: { cid: '', write: false, last: 0 }, disc: {}, wx: null, velez: null, duel: null, walks: [], walkOn: null });
 let S = blank();
 function load() { S = blank(); try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(blank(), JSON.parse(r)); } catch (e) { /* sin almacenamiento */ } }
 load();
@@ -96,7 +96,7 @@ function onPos(p) {
   $('#gps').textContent = demo ? 'Modo prueba' : good ? 'GPS ok' : 'GPS ±' + Math.round(acc) + ' m';
   $('#gps').className = 'chip ' + (good ? 'ok' : 'warn');
   track(ll, acc);
-  discover(ll, acc); loadWx(); loadVelez();
+  discover(ll, acc); loadWx(); loadVelez(); if (S.walkOn) walkUI();
   dayCheck();
   ensurePOIs();
   if (openM && !hold) renderModal();
@@ -113,7 +113,7 @@ function track(ll, acc) {
     const d = dist(last.ll, ll), dt = Math.max((now - last.t) / 1000, 1);
     if (d < 10) { save(); return; }
     const vehiculo = !demo && d / dt > 2.8; // más de ~10 km/h: tren, bondi o auto, no cuenta
-    if (!vehiculo && d < 1500) { const t = today(); S.km += d / 1000; S.kmDay[t] = (S.kmDay[t] || 0) + d / 1000; }
+    if (!vehiculo && d < 1500) { const t = today(); S.km += d / 1000; S.kmDay[t] = (S.kmDay[t] || 0) + d / 1000; walkTrack(ll, d); }
   }
   last = { ll, t: now };
   save(); hud();
@@ -295,7 +295,7 @@ async function addTask(text, over) {
   }
 }
 
-function completeTask(id) {
+function completeTask(id, silent) {
   const t = S.tasks.find(x => x.id === id);
   if (!t || t.st !== 'open' || t.date !== today()) return;
   const before = lvl(S.xp).L, now = new Date();
@@ -304,7 +304,9 @@ function completeTask(id) {
   t.st = 'done'; t.got = xp; t.late = late;
   S.xp += xp; S.at[t.a] = (S.at[t.a] || 0) + xp; S.xpDay[d] = (S.xpDay[d] || 0) + xp;
   S.log.push({ t: d, h: nowHM(), type: 'agenda', kind: t.kind, a: t.a, xp, txt: t.title, late });
-  save(); hud(); renderSheet(); askNote(S.log.length - 1);
+  save(); hud(); renderSheet();
+  if (silent) return;
+  askNote(S.log.length - 1);
   const L2 = lvl(S.xp).L;
   toast(L2 > before ? `¡Subiste a nivel ${L2}!` : late ? `Hecha fuera de horario: +${xp} XP` : `Misión cumplida: +${xp} XP`);
   try { navigator.vibrate && navigator.vibrate([60, 40, 140]); } catch (e) { /* sin vibración */ }
@@ -568,7 +570,7 @@ function askNote(i) {
     <button class="ghost" id="closeM">${e.note ? 'Cerrar' : 'Saltar'}</button>`;
   $('#modal').hidden = false;
 }
-const LBL = t => t === 'agenda' ? 'Agenda' : t === 'duel' ? 'Duelo' : D.TYPES[t] ? D.TYPES[t].n : '';
+const LBL = t => t === 'agenda' ? 'Agenda' : t === 'duel' ? 'Duelo' : t === 'vaca' ? 'Vaca' : D.TYPES[t] ? D.TYPES[t].n : '';
 function vDiario() {
   const items = S.log.map((e, i) => [e, i]).filter(([e]) => e.type !== 'disc').reverse();
   if (!items.length) return '<h2>Diario</h2><p class="mute">Cuando cumplas una misión, acá queda lo que pasó.</p>';
@@ -690,6 +692,98 @@ async function copyText(t, ok) {
   catch (e) { const i = document.createElement('textarea'); i.value = t; document.body.appendChild(i); i.select(); try { document.execCommand('copy'); toast(ok); } catch (er) { toast('No pude copiar: seleccionalo a mano'); } i.remove(); }
 }
 
+/* ---------- paseos con Vaca: con GPS en vivo o cargados a mano ---------- */
+const VPAL = { c: '#b8642a', l: '#d98a4a', n: '#151515', e: '#3a1d0a', w: '#f2e6da', m: '#8a7da0' };
+const VACA = ['..........c...', '.........cccc.', '........ccecll', 'c.......ccccln', '.c.....mmcccl.', '..ccccccccccw.', '..cccccccccww.', '..cc.cc..cc...', '..cc.cc..cc...', '..ee.ee..ee...'];
+const vacaSprite = () => `<svg viewBox="0 0 14 10" shape-rendering="crispEdges" width="100%" height="100%" aria-hidden="true">${VACA.map((r, y) => [...r].map((c, x) => c === '.' ? '' : `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${VPAL[c]}"/>`).join('')).join('')}</svg>`;
+const vacaMk = L.marker(DEMO_POS, { icon: L.divIcon({ className: 'lb-icon', html: `<div class="vaca-in">${vacaSprite()}</div>`, iconSize: [31, 22], iconAnchor: [-6, 20] }), zIndexOffset: 900, interactive: false, keyboard: false });
+const walkLine = L.polyline([], { color: '#d98a4a', weight: 4, opacity: .85, interactive: false });
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && 'wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) { /* el celu no lo permite: seguimos igual */ }
+}
+document.addEventListener('visibilitychange', () => { if (S.walkOn && document.visibilityState === 'visible') keepAwake(true); });
+
+const walkXP = (min, km, manual) => manual ? Math.min(90, 30 + Math.floor(min / 10) * 5) : Math.min(150, 40 + Math.floor(min / 10) * 10 + Math.floor(km * 10) * 2);
+const fmtMin = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+
+function startWalk() {
+  if (S.walkOn) return;
+  S.walkOn = { start: Date.now(), km: 0, path: pos ? [pos.ll] : [] };
+  save(); keepAwake(true); walkUI(); closeModal();
+  toast('Arrancó el paseo con Vaca');
+}
+function walkTrack(ll, d) { // lo llama track() con cada tramo caminado
+  if (!S.walkOn) return;
+  S.walkOn.km += d / 1000;
+  S.walkOn.path.push(ll); if (S.walkOn.path.length > 2000) S.walkOn.path.splice(1, 1);
+}
+function finishWalk(discard) {
+  const w = S.walkOn; if (!w) return;
+  S.walkOn = null; keepAwake(false);
+  const min = Math.round((Date.now() - w.start) / 60000);
+  if (discard || min < 5) { save(); walkUI(); toast(discard ? 'Paseo descartado' : 'Muy cortito: para contar tiene que durar 5 minutos'); return; }
+  saveWalk({ start: w.start, min, km: +w.km.toFixed(2), src: 'gps' });
+}
+function saveWalk(wk) {
+  const d = dayKey(new Date(wk.start)), before = lvl(S.xp).L;
+  const xp = walkXP(wk.min, wk.km, wk.src === 'manual') * xpMult();
+  S.walks.push(Object.assign({ id: uid(), d }, wk));
+  S.xp += xp; S.at.R += xp; S.xpDay[d] = (S.xpDay[d] || 0) + xp;
+  const li = S.log.length;
+  S.log.push({ t: d, h: new Date(wk.start).toTimeString().slice(0, 5), type: 'vaca', a: 'R', xp, txt: `Paseo con Vaca · ${fmtMin(wk.min)}${wk.km ? ' · ' + fmtKm(wk.km) : ''}${wk.src === 'manual' ? ' (cargado a mano)' : ''}` });
+  // si en la agenda de hoy había "pasear a Vaca", queda cumplida sola
+  if (d === today()) {
+    const t = S.tasks.find(x => x.date === d && x.st === 'open' && /vaca|pase/.test(P.key(x.title)));
+    if (t) completeTask(t.id, true);
+  }
+  save(); hud(); walkUI(); renderSheet(); askNote(li);
+  const L2 = lvl(S.xp).L;
+  toast(L2 > before ? `¡Subiste a nivel ${L2}!` : `Paseo registrado: +${xp} XP`);
+}
+$('#vacaIco').innerHTML = vacaSprite();
+function walkUI() {
+  const w = S.walkOn, bar = $('#walkBar');
+  $('#walkBtn').hidden = !!w; bar.hidden = !w;
+  if (w) {
+    const s = Math.floor((Date.now() - w.start) / 1000);
+    $('#walkTxt').textContent = `Paseando con Vaca · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · ${fmtKm(w.km)}`;
+    if (pos) { if (!map.hasLayer(vacaMk)) vacaMk.addTo(map); vacaMk.setLatLng(pos.ll); }
+    if (!map.hasLayer(walkLine)) walkLine.addTo(map);
+    walkLine.setLatLngs(w.path);
+  } else { if (map.hasLayer(vacaMk)) map.removeLayer(vacaMk); if (map.hasLayer(walkLine)) map.removeLayer(walkLine); }
+}
+function walkMenu() {
+  openM = null; hold = null; noteIdx = null;
+  const now = nowHM();
+  $('#modalBody').innerHTML = `<div class="vaca-big">${vacaSprite()}</div><h2>Paseo con Vaca</h2>
+    <p class="mute">Con GPS cuenta minutos y kilómetros, y da más XP. Dejá la app abierta durante el paseo: el celu no apaga la pantalla mientras dura.</p>
+    <button class="big" id="walkGo">Empezar paseo</button>
+    <h3>¿Ya la sacaste? Cargalo a mano</h3>
+    <div class="tags" id="wMins">${[15, 20, 30, 45, 60].map(m => `<button type="button" class="tag tb" data-wmin="${m}" aria-pressed="${m === 30}">${m} min</button>`).join('')}</div>
+    <div class="row2" style="margin-top:6px"><label class="mute" for="wHora" style="align-self:center;margin:0">Hora</label><input id="wHora" type="time" value="${now}"><button class="ghost" id="walkManual">Cargar</button></div>
+    <button class="ghost" id="closeM">Cerrar</button>`;
+  $('#modal').hidden = false;
+}
+function vVaca() {
+  const wk = weekDays(weekKey(new Date()));
+  const thisW = S.walks.filter(w => wk.includes(w.d));
+  let n = 0; const d = new Date(); if (!S.walks.some(w => w.d === dayKey(d))) d.setDate(d.getDate() - 1);
+  while (S.walks.some(w => w.d === dayKey(d))) { n++; d.setDate(d.getDate() - 1); }
+  const days = [...Array(7)].map((_, i) => { const x = new Date(); x.setDate(x.getDate() - 6 + i); const k = dayKey(x); const ws = S.walks.filter(w => w.d === k); return [x.toLocaleDateString('es-AR', { weekday: 'short' }), ws.reduce((s, w) => s + w.min, 0), ws.length]; });
+  const mx = Math.max(...days.map(x => x[1]));
+  return `<h3>Vaca</h3><div class="grid">
+    <div class="st"><span>Paseos esta semana</span><b>${thisW.length}</b></div>
+    <div class="st"><span>Racha de paseos</span><b>${n === 1 ? '1 día' : n + ' días'}</b></div>
+    <div class="st"><span>Km con Vaca</span><b>${fmtKm(S.walks.reduce((s, w) => s + (w.km || 0), 0))}</b></div>
+    <div class="st"><span>Tiempo total</span><b>${fmtMin(S.walks.reduce((s, w) => s + w.min, 0))}</b></div></div>
+    ${rows(days.map(([l, m, c]) => [l, m, c ? `${c} · ${m} min` : '—']), mx, 'var(--gold)')}
+    <button class="ghost" id="walkMenu2">Pasear o cargar un paseo</button>`;
+}
+
 /* ---------- HUD ---------- */
 function hud() {
   const { L, lo, hi } = lvl(S.xp);
@@ -753,6 +847,7 @@ function vStats() {
   <div class="grid">${cards.map(([k, v]) => `<div class="st"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
   <p class="mute" style="margin-top:8px">El escudo te cubre un día sin XP por semana para que no se corte la racha. Se recarga cada lunes.</p>
   ${vDisc()}
+  ${vVaca()}
   <h3>Últimos 7 días</h3>${rows(days.map(([l, x, k]) => [l, x, x + ' XP · ' + fmtKm(k)]), mxd, 'var(--coral)')}
   <h3>Atributos</h3>${Object.keys(D.ATTR).map(k => `<div class="row"><span>${D.ATTR[k]}</span><div class="bar" style="--c:${ACOL[k]}"><i style="width:${mxa ? (S.at[k] || 0) / mxa * 100 : 0}%"></i></div><span>${S.at[k] || 0} XP</span></div>`).join('')}
   <h3>Por tipo de lugar</h3>${rows(Object.keys(D.TYPES).map(k => [D.TYPES[k].n, bt[k] || 0, (bt[k] || 0) + ' misiones']), mxt, 'var(--blue)')}
@@ -783,6 +878,9 @@ const ACH = [
   ['Fortinero', 'Cumplí una misión en un día de Vélez', () => [S.log.filter(e => e.type !== 'disc' && (S.velez ? S.velez.ms : []).some(m => dayKey(new Date(m.date)) === e.t)).length ? 1 : 0, 1]],
   ['Duelista', 'Cumplí los 5 retos de un duelo', () => [S.duel ? duelRetos(S.duel.code).filter(duelDone).length : 0, 5]],
   ['Bitácora', 'Escribí 10 entradas en el diario', () => [S.log.filter(e => e.note).length, 10]],
+  ['Mejor amiga', 'Registrá 10 paseos con Vaca', () => [S.walks.length, 10]],
+  ['Maratón perruna', 'Caminá 10 km con Vaca (con GPS)', () => [Math.floor(S.walks.reduce((s, w) => s + (w.km || 0), 0)), 10]],
+  ['Rutina perruna', 'Sacá a Vaca 7 días seguidos', () => { let n = 0; const d = new Date(); if (!S.walks.some(w => w.d === dayKey(d))) d.setDate(d.getDate() - 1); while (S.walks.some(w => w.d === dayKey(d))) { n++; d.setDate(d.getDate() - 1); } return [n, 7]; }],
   ['Puntual', 'Cumplí 10 misiones de tu agenda a horario', () => [S.log.filter(x => x.type === 'agenda' && !x.late).length, 10]],
   ['Lo dije y lo hice', 'Cumplí 5 misiones principales de tu agenda', () => [S.log.filter(x => x.type === 'agenda' && x.kind === 'p').length, 5]]
 ];
@@ -808,6 +906,7 @@ document.addEventListener('click', async e => {
   if (b.dataset.skin) return setSkin(b.dataset.skin);
   if (b.dataset.done) return completeTask(b.dataset.done);
   if (b.dataset.note) return askNote(+b.dataset.note);
+  if (b.dataset.wmin) { document.querySelectorAll('[data-wmin]').forEach(x => x.setAttribute('aria-pressed', x === b)); return; }
   if (b.dataset.del) return removeTask(b.dataset.del);
   if (b.dataset.tkind) return cycleTask(b.dataset.tkind, 'kind');
   if (b.dataset.tattr) return cycleTask(b.dataset.tattr, 'a');
@@ -822,6 +921,18 @@ document.addEventListener('click', async e => {
       hold = Date.now(); renderModal(); break;
     }
     case 'closeM': closeModal(); break;
+    case 'walkBtn': case 'walkMenu2': walkMenu(); break;
+    case 'walkGo': startWalk(); break;
+    case 'walkEnd': finishWalk(false); break;
+    case 'walkX':
+      if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = '¿Seguro?'; setTimeout(() => { b.textContent = 'Descartar'; delete b.dataset.sure; }, 3000); break; }
+      finishWalk(true); break;
+    case 'walkManual': {
+      const sel = document.querySelector('[data-wmin][aria-pressed=true]'), min = sel ? +sel.dataset.wmin : 30;
+      const hm = ($('#wHora').value || nowHM()).split(':'), st = new Date(); st.setHours(+hm[0], +hm[1] || 0, 0, 0);
+      if (st > new Date()) st.setDate(st.getDate() - 1);
+      closeModal(); saveWalk({ start: st.getTime(), min, km: 0, src: 'manual' }); break;
+    }
     case 'noteSave': {
       const e = S.log[noteIdx]; if (e) { const v = $('#note').value.trim(); if (v) e.note = v; else delete e.note; save(); }
       closeModal(); renderSheet(); if (e && e.note) toast('Guardado en el diario'); break;
@@ -890,11 +1001,12 @@ document.addEventListener('change', e => { if (e.target.dataset.dnote) { e.targe
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && (openM || noteIdx != null)) closeModal(); });
 
 setInterval(() => { if (hold) tickHold(); }, 250);
+setInterval(() => { if (S.walkOn) walkUI(); }, 1000);
 setInterval(() => { dayCheck(); velezDay(); hud(); if (tab === 'misiones') renderSheet(); }, 60000);
 
 /* ---------- arranque ---------- */
 if (hacker()) document.querySelector('meta[name=theme-color]').content = '#020a04';
-hud(); dayCheck(); velezDay(); draw();
+hud(); dayCheck(); velezDay(); draw(); walkUI(); if (S.walkOn) keepAwake(true);
 if (S.gcal.cid && gTok) syncCal(false);
 if (location.hash === '#demo') startDemo();
 else if (S.intro) startGPS();
