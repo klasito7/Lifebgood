@@ -25,7 +25,7 @@ const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Mat
 const lvl = xp => { let L = 1; while (xp >= 50 * L * (L + 1)) L++; return { L, lo: 50 * (L - 1) * L, hi: 50 * L * (L + 1) }; };
 
 /* ---------- estado (queda en este celu) ---------- */
-const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0 }, km: 0, kmDay: {}, xpDay: {}, log: [], visited: {}, cells: {}, day: null, missions: [], rerolls: 0, expired: 0, perfect: {}, poi: null, tasks: [], dailies: [], learn: {}, gcal: { cid: '', write: false, last: 0 }, disc: {}, wx: null, velez: null, duel: null, walks: [], walkOn: null });
+const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0 }, km: 0, kmDay: {}, xpDay: {}, log: [], visited: {}, cells: {}, day: null, missions: [], rerolls: 0, expired: 0, perfect: {}, poi: null, tasks: [], dailies: [], learn: {}, gcal: { cid: '', write: false, last: 0 }, disc: {}, wx: null, velez: null, duel: null, walks: [], walkOn: null, fx: { token: '', gist: null, ev: [], sent: 0, last: 0, err: '', lv: null }, found: {}, foundDay: {} });
 let S = blank();
 function load() { S = blank(); try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(blank(), JSON.parse(r)); } catch (e) { /* sin almacenamiento */ } }
 load();
@@ -96,7 +96,7 @@ function onPos(p) {
   $('#gps').textContent = demo ? 'Modo prueba' : good ? 'GPS ok' : 'GPS ±' + Math.round(acc) + ' m';
   $('#gps').className = 'chip ' + (good ? 'ok' : 'warn');
   track(ll, acc);
-  discover(ll, acc); loadWx(); loadVelez(); if (S.walkOn) walkUI();
+  discover(ll, acc); pickFinds(ll, acc); loadWx(); loadVelez(); if (S.walkOn) walkUI();
   dayCheck();
   ensurePOIs();
   if (openM && !hold) renderModal();
@@ -178,6 +178,7 @@ function gen(reroll) {
 }
 function dayCheck() {
   const t = today();
+  if (S.found && Object.keys(S.found).length > 200) cleanFinds();
   const old = S.tasks.filter(x => x.date < t);
   if (old.length) { S.expired += old.filter(x => x.st === 'open').length; S.tasks = S.tasks.filter(x => x.date >= t); save(); }
   if (S.dailies.length) { const n = S.tasks.length; ensureDailies(); if (S.tasks.length !== n) save(); }
@@ -190,6 +191,10 @@ function dayCheck() {
 
 function draw() {
   layer.clearLayers();
+  for (const f of findsNear()) {
+    L.marker(f.ll, { icon: L.divIcon({ className: 'lb-icon', html: `<div class="fd fd-${f.type}">${FDEF[f.type].g}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }), title: FDEF[f.type].n })
+      .on('click', () => { const d = pos ? dist(pos.ll, f.ll) : null; if (d != null && d <= FIND_R + Math.min(pos.acc, 25)) pick(f); else toast(`${FDEF[f.type].n}${d != null ? ' · a ' + fmtD(d) : ''}: caminá hasta ahí y se agarra sola`); }).addTo(layer);
+  }
   const mis = new Set(S.missions.map(m => m.poi));
   for (const [id, v] of Object.entries(S.disc)) {
     if (mis.has(id) || !v.ll) continue;
@@ -247,7 +252,7 @@ function complete(m) {
   if (!S.disc[m.poi]) S.disc[m.poi] = { d: t, type: m.type, name: m.name, ll: m.ll };
   S.log.push({ t, h: nowHM(), type: m.type, rar: m.rar, a: m.a, xp, txt: m.txt, name: m.name });
   if (S.missions.every(x => x.st === 'done')) S.perfect[t] = 1;
-  save(); draw(); hud(); renderSheet(); askNote(S.log.length - 1);
+  save(); draw(); hud(); renderSheet(); offerNote(S.log.length - 1);
   const L2 = lvl(S.xp).L;
   toast(L2 > before ? `¡Subiste a nivel ${L2}!` : `Misión cumplida: +${xp} XP`);
   try { navigator.vibrate && navigator.vibrate([60, 40, 140]); } catch (e) { /* sin vibración */ }
@@ -306,7 +311,7 @@ function completeTask(id, silent) {
   S.log.push({ t: d, h: nowHM(), type: 'agenda', kind: t.kind, a: t.a, xp, txt: t.title, late });
   save(); hud(); renderSheet();
   if (silent) return;
-  askNote(S.log.length - 1);
+  offerNote(S.log.length - 1);
   const L2 = lvl(S.xp).L;
   toast(L2 > before ? `¡Subiste a nivel ${L2}!` : late ? `Hecha fuera de horario: +${xp} XP` : `Misión cumplida: +${xp} XP`);
   try { navigator.vibrate && navigator.vibrate([60, 40, 140]); } catch (e) { /* sin vibración */ }
@@ -559,6 +564,14 @@ function streak() { return streakInfo().n; }
 
 /* ---------- diario de misión ---------- */
 let noteIdx = null;
+// después de cumplir algo: una barrita que ofrece anotar, sin frenar nada
+let snT = null;
+function offerNote(i) {
+  if (openM) closeModal();
+  const e = S.log[i]; if (!e) return;
+  $('#snack').innerHTML = `<span>¿Querés anotar qué pasó?</span><button data-note="${i}">Anotar en el diario</button>`;
+  $('#snack').hidden = false; clearTimeout(snT); snT = setTimeout(() => { $('#snack').hidden = true; }, 7000);
+}
 function askNote(i) {
   const e = S.log[i]; if (!e) return;
   noteIdx = i; openM = null; hold = null;
@@ -572,7 +585,7 @@ function askNote(i) {
 }
 const LBL = t => t === 'agenda' ? 'Agenda' : t === 'duel' ? 'Duelo' : t === 'vaca' ? 'Vaca' : D.TYPES[t] ? D.TYPES[t].n : '';
 function vDiario() {
-  const items = S.log.map((e, i) => [e, i]).filter(([e]) => e.type !== 'disc').reverse();
+  const items = S.log.map((e, i) => [e, i]).filter(([e]) => e.type !== 'disc' && e.type !== 'find').reverse();
   if (!items.length) return '<h2>Diario</h2><p class="mute">Cuando cumplas una misión, acá queda lo que pasó.</p>';
   const days = new Map();
   for (const it of items) { const k = it[0].t; if (!days.has(k)) days.set(k, []); days.get(k).push(it); }
@@ -732,6 +745,7 @@ function saveWalk(wk) {
   const d = dayKey(new Date(wk.start)), before = lvl(S.xp).L;
   const xp = walkXP(wk.min, wk.km, wk.src === 'manual') * xpMult();
   S.walks.push(Object.assign({ id: uid(), d }, wk));
+  fxAdd({ id: 'w' + wk.start, ty: 'walk', s: wk.start, min: wk.min, km: wk.km || 0 });
   S.xp += xp; S.at.R += xp; S.xpDay[d] = (S.xpDay[d] || 0) + xp;
   const li = S.log.length;
   S.log.push({ t: d, h: new Date(wk.start).toTimeString().slice(0, 5), type: 'vaca', a: 'R', xp, txt: `Paseo con Vaca · ${fmtMin(wk.min)}${wk.km ? ' · ' + fmtKm(wk.km) : ''}${wk.src === 'manual' ? ' (cargado a mano)' : ''}` });
@@ -740,14 +754,14 @@ function saveWalk(wk) {
     const t = S.tasks.find(x => x.date === d && x.st === 'open' && /vaca|pase/.test(P.key(x.title)));
     if (t) completeTask(t.id, true);
   }
-  save(); hud(); walkUI(); renderSheet(); askNote(li);
+  save(); hud(); walkUI(); renderSheet(); offerNote(li);
   const L2 = lvl(S.xp).L;
   toast(L2 > before ? `¡Subiste a nivel ${L2}!` : `Paseo registrado: +${xp} XP`);
 }
 $('#vacaIco').innerHTML = vacaSprite();
 function walkUI() {
   const w = S.walkOn, bar = $('#walkBar');
-  $('#walkBtn').hidden = !!w; bar.hidden = !w;
+  bar.hidden = !w;
   if (w) {
     const s = Math.floor((Date.now() - w.start) / 1000);
     $('#walkTxt').textContent = `Paseando con Vaca · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · ${fmtKm(w.km)}`;
@@ -784,9 +798,125 @@ function vVaca() {
     <button class="ghost" id="walkMenu2">Pasear o cargar un paseo</button>`;
 }
 
+/* ---------- puente con FUNVS: Lifebgood deja lo que ganaste en el Gist de la Colección ---------- */
+// FUNVS lo lee al sincronizar. Cada cosa tiene un id único, así que nunca entra dos veces.
+function hubData() { try { return JSON.parse(localStorage.getItem('hub2') || 'null'); } catch (e) { return null; } } // FUNVS abierto en este mismo navegador
+const fxToken = () => S.fx.token || (hubData() && hubData().sync && hubData().sync.token) || '';
+const fxAutoTok = () => !S.fx.token && !!fxToken();
+async function ghApi(path, opt) {
+  const r = await fetch('https://api.github.com' + path, Object.assign({}, opt, { headers: { Authorization: 'Bearer ' + fxToken(), Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' } }));
+  if (!r.ok) { const e = new Error('gh' + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+async function fxGist() {
+  if (S.fx.gist) return S.fx.gist;
+  const h = hubData(); if (h && h.figusGist) { S.fx.gist = h.figusGist; save(); return S.fx.gist; }
+  for (let p = 1; p <= 3; p++) {
+    const L0 = await ghApi(`/gists?per_page=100&page=${p}`);
+    const g = L0.find(x => x.files && x.files['figus.json']);
+    if (g) { S.fx.gist = g.id; save(); return g.id; }
+    if (L0.length < 100) break;
+  }
+  const e = new Error('nogist'); e.status = 'nogist'; throw e;
+}
+function fxAdd(e) {
+  e.id = e.id || uid() + Date.now().toString(36); e.t = e.t || Date.now();
+  if (S.fx.ev.some(x => x.id === e.id)) return;
+  S.fx.ev.push(e); if (S.fx.ev.length > 500) S.fx.ev = S.fx.ev.slice(-500);
+  save(); fxSchedule();
+}
+let fxT = null, fxBusy = false;
+function fxSchedule() { if (!fxToken()) return; clearTimeout(fxT); fxT = setTimeout(() => fxPush(false), 15000); }
+async function fxPush(interactive) {
+  if (!fxToken()) { if (interactive) toast('Falta conectar FUNVS'); return; }
+  if (fxBusy) return; fxBusy = true; clearTimeout(fxT); fxT = null;
+  try {
+    const id = await fxGist();
+    await ghApi('/gists/' + id, { method: 'PATCH', body: JSON.stringify({ files: { 'lifebgood.json': { content: JSON.stringify({ v: 1, app: 'Lifebgood', updatedAt: Date.now(), ev: S.fx.ev }) } } }) });
+    S.fx.last = Date.now(); S.fx.sent = S.fx.ev.length; S.fx.err = ''; save();
+    if (interactive) toast('Enviado a FUNVS: se suma al abrir la Colección');
+  } catch (e) {
+    S.fx.err = e.status === 401 ? 'El token no sirve o se venció' : e.status === 'nogist' ? 'No encontré la Colección de FUNVS en ese GitHub' : e.status === 403 || e.status === 404 ? 'El token no tiene permiso de "gist"' : 'Sin conexión con GitHub';
+    save(); if (interactive) toast(S.fx.err);
+  }
+  fxBusy = false; if (tab === 'stats') renderSheet();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && fxT) fxPush(false); });
+const fxPending = () => S.fx.ev.length - (S.fx.sent || 0);
+function vFunvs() {
+  const vc = S.fx.ev.filter(e => e.ty === 'coins').reduce((s, e) => s + e.n, 0), sob = S.fx.ev.filter(e => e.ty === 'sobre').length, pas = S.fx.ev.filter(e => e.ty === 'walk').length;
+  const head = `<h3>FUNVS</h3><p class="mute">Lo que ganás acá (vaccoins de hallazgos y niveles, sobres y paseos de Vaca) va a tu Colección de FUNVS. Hasta ahora: ${vc} vaccoins, ${sob} sobre${sob === 1 ? '' : 's'} y ${pas} paseo${pas === 1 ? '' : 's'}.</p>`;
+  if (!fxToken()) return head + `<p class="mute">Pegá el mismo token de GitHub que usás en FUNVS para sincronizar (permiso "gist"). Queda guardado solo en este navegador.</p>
+    <div class="row2"><input id="fxTok" type="password" placeholder="ghp_… o github_pat_…" autocomplete="off" aria-label="Token de GitHub"><button class="ghost" id="fxSave">Conectar</button></div>`;
+  return head + `<p class="mute">${fxAutoTok() ? 'Conectado con el token de FUNVS de este navegador. ' : 'Conectado. '}${S.fx.err ? '⚠ ' + esc(S.fx.err) : S.fx.last ? 'Último envío: ' + ago(S.fx.last) + '.' : 'Todavía no se envió nada.'}${fxPending() > 0 ? ` ${fxPending()} cosa${fxPending() > 1 ? 's' : ''} por enviar.` : ''}</p>
+    <div class="btns"><button class="ghost" id="fxSend">Enviar ahora</button>${S.fx.token ? '<button class="ghost" id="fxForget">Quitar token</button>' : ''}</div>`;
+}
+// cada nivel nuevo: 50 vaccoins para FUNVS
+function fxLevels() {
+  const L0 = lvl(S.xp).L;
+  if (S.fx.lv == null) { S.fx.lv = L0; save(); return; }
+  for (let l = S.fx.lv + 1; l <= L0; l++) fxAdd({ id: 'lv' + l, ty: 'coins', n: 50, why: `Subiste a nivel ${l}` });
+  if (L0 > S.fx.lv) { S.fx.lv = L0; save(); }
+}
+
+/* ---------- hallazgos: cosas que aparecen por la calle y se agarran caminando ---------- */
+const SLOT = 30 * 60e3, CELL = 0.004, FIND_R = 40, FIND_CAP = 25;
+const FDEF = {
+  bolsa: { n: 'Bolsa de vaccoins', g: 'V', w: 50 },
+  energia: { n: 'Energía', g: '+', w: 20 },
+  cofre: { n: 'Cofre', g: '▣', w: 13 },
+  grande: { n: 'Bolsa grande', g: 'V', w: 8 },
+  vaca: { n: 'Sobre de Vaca', g: 'S', w: 9 },
+  velez: { n: 'Sobre de Vélez', g: 'S', w: 0 }
+};
+function findsNear() {
+  if (!pos) return [];
+  const t = today(); if ((S.foundDay[t] || 0) >= FIND_CAP) return [];
+  const slot = Math.floor(Date.now() / SLOT), ci = Math.floor(pos.ll[0] / CELL), cj = Math.floor(pos.ll[1] / CELL), out = [];
+  const W = Object.entries(FDEF).map(([k, v]) => [k, k === 'velez' ? (xpMult() > 1 ? 8 : 0) : k === 'grande' && xpMult() > 1 ? 0 : v.w]);
+  const tot = W.reduce((s, x) => s + x[1], 0);
+  for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+    const a = ci + di, b = cj + dj, R = rng(hash(`${a}:${b}:${slot}`));
+    const near = S.poi ? S.poi.list.filter(p => Math.floor(p.ll[0] / CELL) === a && Math.floor(p.ll[1] / CELL) === b) : [];
+    const n = 2 + (R() < .4 ? 1 : 0);
+    for (let k = 0; k < n; k++) {
+      let ll;
+      if (near.length && R() < .6) { const p = near[Math.floor(R() * near.length)]; ll = [p.ll[0] + (R() - .5) * .00025, p.ll[1] + (R() - .5) * .0003]; } // cerca de un negocio: siempre se llega
+      else ll = [(a + R()) * CELL, (b + R()) * CELL];
+      let x = R() * tot, type = 'bolsa';
+      for (const [k2, w] of W) { if ((x -= w) < 0) { type = k2; break; } }
+      out.push({ id: `${a}:${b}:${slot}:${k}`, ll, type, val: 5 + Math.floor(R() * 11) });
+    }
+  }
+  return out.filter(f => !S.found[f.id]);
+}
+function pickFinds(ll, acc) {
+  if (acc > 40 && !demo) return;
+  for (const f of findsNear()) if (dist(ll, f.ll) <= FIND_R + Math.min(acc, 25)) pick(f);
+}
+function pick(f) {
+  if (S.found[f.id]) return;
+  const t = today(), before = lvl(S.xp).L;
+  if ((S.foundDay[t] || 0) >= FIND_CAP) return;
+  S.found[f.id] = Date.now(); S.foundDay[t] = (S.foundDay[t] || 0) + 1;
+  const m = xpMult();
+  const R0 = { bolsa: [f.val, 5], energia: [0, 30], cofre: [20, 50], grande: [25, 10], vaca: [0, 20], velez: [0, 20] }[f.type];
+  const vc = R0[0], xp = R0[1] * m;
+  S.xp += xp; S.at.R += xp; S.xpDay[t] = (S.xpDay[t] || 0) + xp;
+  if (vc) fxAdd({ id: 'f' + f.id, ty: 'coins', n: vc, why: FDEF[f.type].n });
+  if (f.type === 'vaca' || f.type === 'velez') fxAdd({ id: 'f' + f.id, ty: 'sobre', k: f.type });
+  S.log.push({ t, h: nowHM(), type: 'find', ftype: f.type, a: 'R', xp, vc, txt: FDEF[f.type].n });
+  save(); hud(); draw(); renderSheet();
+  const L2 = lvl(S.xp).L;
+  toast(L2 > before ? `¡Subiste a nivel ${L2}!` : `Encontraste: ${FDEF[f.type].n}${vc ? ` (+${vc} vaccoins)` : ''}${f.type === 'vaca' || f.type === 'velez' ? ' para FUNVS' : ''} · +${xp} XP`);
+  try { navigator.vibrate && navigator.vibrate([30, 30, 30, 30, 90]); } catch (e) { /* sin vibración */ }
+}
+function cleanFinds() { const lim = Date.now() - 2 * 864e5; for (const [k, v] of Object.entries(S.found)) if (v < lim) delete S.found[k]; }
+
 /* ---------- HUD ---------- */
 function hud() {
   const { L, lo, hi } = lvl(S.xp);
+  fxLevels();
   $('#lv').textContent = L;
   $('#xpb').style.width = ((S.xp - lo) / (hi - lo) * 100) + '%';
   $('#xpt').textContent = `${S.xp} XP · faltan ${hi - S.xp} para nivel ${L + 1}`;
@@ -797,11 +927,21 @@ function hud() {
 
 /* ---------- paneles ---------- */
 let tab = 'mapa';
+const TITLES = { misiones: 'Misiones', duelo: 'Duelo', diario: 'Diario', stats: 'Stats y logros' };
 function setTab(t) {
-  tab = t;
-  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  tab = t; dial(false);
   $('#sheet').hidden = t === 'mapa';
+  $('#shTitle').textContent = TITLES[t] || '';
+  document.querySelectorAll('.dial-it').forEach(b => b.classList.toggle('on', b.dataset.go === t));
+  if (t !== 'mapa') $('#sheet').scrollTop = 0;
   renderSheet();
+}
+/* menú que se despliega (FAB expandible) */
+function dial(open) {
+  const o = open == null ? $('#dialList').hidden : open;
+  $('#dialList').hidden = !o; $('#dialBg').hidden = !o;
+  $('#dialMain').setAttribute('aria-expanded', o); $('#dialMain').classList.toggle('open', o);
+  $('#dialWalkTxt').textContent = S.walkOn ? 'Paseo en curso' : 'Paseo con Vaca';
 }
 function renderSheet() {
   if (tab === 'mapa') return;
@@ -842,7 +982,7 @@ function vStats() {
   const bt = count('type'), br = count('rar');
   const mxt = Math.max(0, ...Object.values(bt));
   const si = streakInfo();
-  const cards = [['Nivel', L], ['XP total', S.xp], ['Km caminados', fmtKm(S.km)], ['Misiones', S.log.filter(x => x.type !== 'disc').length], ['Lugares descubiertos', Object.keys(S.disc).length], ['Zonas pisadas', Object.keys(S.cells).length], ['Racha', si.n === 1 ? '1 día' : si.n + ' días'], ['Escudo de racha', si.shieldUsed ? 'Usado' : 'Disponible'], ['De tu agenda', S.log.filter(x => x.type === 'agenda').length], ['Vencidas', S.expired]];
+  const cards = [['Nivel', L], ['XP total', S.xp], ['Km caminados', fmtKm(S.km)], ['Misiones', S.log.filter(x => x.type !== 'disc' && x.type !== 'find').length], ['Hallazgos', S.log.filter(x => x.type === 'find').length], ['Lugares descubiertos', Object.keys(S.disc).length], ['Zonas pisadas', Object.keys(S.cells).length], ['Racha', si.n === 1 ? '1 día' : si.n + ' días'], ['Escudo de racha', si.shieldUsed ? 'Usado' : 'Disponible'], ['De tu agenda', S.log.filter(x => x.type === 'agenda').length], ['Vencidas', S.expired]];
   return `<h2>Estadísticas</h2>
   <div class="grid">${cards.map(([k, v]) => `<div class="st"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
   <p class="mute" style="margin-top:8px">El escudo te cubre un día sin XP por semana para que no se corte la racha. Se recarga cada lunes.</p>
@@ -853,6 +993,7 @@ function vStats() {
   <h3>Por tipo de lugar</h3>${rows(Object.keys(D.TYPES).map(k => [D.TYPES[k].n, bt[k] || 0, (bt[k] || 0) + ' misiones']), mxt, 'var(--blue)')}
   <h3>Por rareza</h3><p class="mute">Comunes ${br.c || 0} · Raras ${br.r || 0} · Épicas ${br.e || 0}</p>
   ${vGcal()}
+  ${vFunvs()}
   <h3>Skin</h3><div class="btns">${[['clasica', 'Clásica'], ['hacker', 'Hacker']].map(([k, n]) => `<button class="ghost skin" data-skin="${k}" aria-pressed="${(document.documentElement.dataset.skin || 'clasica') === k}">${n}</button>`).join('')}</div>
   <h3>Tus datos</h3><p class="mute">Todo queda guardado en este navegador. Hacé una copia de vez en cuando por si cambiás de celu.</p>
   <div class="btns"><button class="ghost" id="exp">Exportar copia</button><button class="ghost" id="imp">Importar copia</button></div>
@@ -879,6 +1020,8 @@ const ACH = [
   ['Duelista', 'Cumplí los 5 retos de un duelo', () => [S.duel ? duelRetos(S.duel.code).filter(duelDone).length : 0, 5]],
   ['Bitácora', 'Escribí 10 entradas en el diario', () => [S.log.filter(e => e.note).length, 10]],
   ['Mejor amiga', 'Registrá 10 paseos con Vaca', () => [S.walks.length, 10]],
+  ['Buscador', 'Encontrá 50 cosas por la calle', () => [S.log.filter(e => e.type === 'find').length, 50]],
+  ['Suertudo', 'Encontrá un sobre', () => [S.log.filter(e => e.type === 'find' && (e.ftype === 'vaca' || e.ftype === 'velez')).length, 1]],
   ['Maratón perruna', 'Caminá 10 km con Vaca (con GPS)', () => [Math.floor(S.walks.reduce((s, w) => s + (w.km || 0), 0)), 10]],
   ['Rutina perruna', 'Sacá a Vaca 7 días seguidos', () => { let n = 0; const d = new Date(); if (!S.walks.some(w => w.d === dayKey(d))) d.setDate(d.getDate() - 1); while (S.walks.some(w => w.d === dayKey(d))) { n++; d.setDate(d.getDate() - 1); } return [n, 7]; }],
   ['Puntual', 'Cumplí 10 misiones de tu agenda a horario', () => [S.log.filter(x => x.type === 'agenda' && !x.late).length, 10]],
@@ -899,13 +1042,20 @@ function toast(msg) { const e = $('#toast'); e.textContent = msg; e.classList.ad
 /* ---------- eventos ---------- */
 document.addEventListener('click', async e => {
   if (e.target.id === 'modal') return closeModal();
+  if (e.target.id === 'dialBg') return dial(false);
   const b = e.target.closest('button');
   if (!b) return;
   if (b.dataset.tab) return setTab(b.dataset.tab);
+  if (b.dataset.go) {
+    const g = b.dataset.go; dial(false);
+    if (g === 'walk') return S.walkOn ? toast('Ya hay un paseo en curso: terminalo desde la barra de arriba') : walkMenu();
+    if (g === 'nueva') { setTab('misiones'); setTimeout(() => { const i = $('#qaIn'); if (i) i.focus(); }, 50); return; }
+    return setTab(tab === g ? 'mapa' : g);
+  }
   if (b.dataset.open) return openMission(b.dataset.open);
   if (b.dataset.skin) return setSkin(b.dataset.skin);
   if (b.dataset.done) return completeTask(b.dataset.done);
-  if (b.dataset.note) return askNote(+b.dataset.note);
+  if (b.dataset.note) { $('#snack').hidden = true; return askNote(+b.dataset.note); }
   if (b.dataset.wmin) { document.querySelectorAll('[data-wmin]').forEach(x => x.setAttribute('aria-pressed', x === b)); return; }
   if (b.dataset.del) return removeTask(b.dataset.del);
   if (b.dataset.tkind) return cycleTask(b.dataset.tkind, 'kind');
@@ -921,8 +1071,13 @@ document.addEventListener('click', async e => {
       hold = Date.now(); renderModal(); break;
     }
     case 'closeM': closeModal(); break;
-    case 'walkBtn': case 'walkMenu2': walkMenu(); break;
+    case 'dialMain': dial(); break;
+    case 'shClose': setTab('mapa'); break;
+    case 'walkMenu2': walkMenu(); break;
     case 'walkGo': startWalk(); break;
+    case 'fxSave': { const v = ($('#fxTok').value || '').trim(); if (!/^(ghp_|github_pat_|gho_)/.test(v)) { toast('Eso no parece un token de GitHub'); break; } S.fx.token = v; S.fx.gist = null; save(); renderSheet(); fxPush(true); break; }
+    case 'fxSend': fxPush(true); break;
+    case 'fxForget': S.fx.token = ''; S.fx.gist = null; save(); renderSheet(); toast('Token quitado'); break;
     case 'walkEnd': finishWalk(false); break;
     case 'walkX':
       if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = '¿Seguro?'; setTimeout(() => { b.textContent = 'Descartar'; delete b.dataset.sure; }, 3000); break; }
@@ -998,11 +1153,12 @@ document.addEventListener('input', e => {
   if (e.target.dataset.dnote && S.duel) { S.duel.notes[e.target.dataset.dnote] = e.target.value; save(); }
 });
 document.addEventListener('change', e => { if (e.target.dataset.dnote) { e.target.blur(); duelPay(); renderSheet(); } });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && (openM || noteIdx != null)) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (openM || noteIdx != null) closeModal(); else if (!$('#dialList').hidden) dial(false); else if (tab !== 'mapa') setTab('mapa'); });
 
 setInterval(() => { if (hold) tickHold(); }, 250);
 setInterval(() => { if (S.walkOn) walkUI(); }, 1000);
-setInterval(() => { dayCheck(); velezDay(); hud(); if (tab === 'misiones') renderSheet(); }, 60000);
+let lastSlot = Math.floor(Date.now() / SLOT);
+setInterval(() => { dayCheck(); velezDay(); hud(); if (Math.floor(Date.now() / SLOT) !== lastSlot) { lastSlot = Math.floor(Date.now() / SLOT); draw(); } if (tab === 'misiones') renderSheet(); }, 60000);
 
 /* ---------- arranque ---------- */
 if (hacker()) document.querySelector('meta[name=theme-color]').content = '#020a04';

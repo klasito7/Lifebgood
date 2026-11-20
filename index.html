@@ -38,21 +38,33 @@
   <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2"/></svg>
 </button>
 
-<button class="fab fab-vaca" id="walkBtn" aria-label="Paseo con Vaca"><span class="vaca-ico" id="vacaIco"></span></button>
 <div class="walkbar" id="walkBar" hidden><span id="walkTxt">Paseando con Vaca</span><button id="walkX" class="wx2">Descartar</button><button id="walkEnd" class="wend">Terminar</button></div>
 
-<section class="sheet" id="sheet" hidden><div id="sheetBody"></div></section>
+<section class="sheet" id="sheet" hidden>
+  <div class="shd"><b id="shTitle"></b><button id="shClose" aria-label="Volver al mapa">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></button></div>
+  <div id="sheetBody"></div>
+</section>
 
-<nav class="tabs" aria-label="Secciones">
-  <button data-tab="mapa" aria-selected="true">Mapa</button>
-  <button data-tab="misiones" aria-selected="false">Misiones</button>
-  <button data-tab="duelo" aria-selected="false">Duelo</button>
-  <button data-tab="diario" aria-selected="false">Diario</button>
-  <button data-tab="stats" aria-selected="false">Stats</button>
-</nav>
+<div class="dial-bg" id="dialBg" hidden></div>
+<div class="dial" id="dial">
+  <div class="dial-list" id="dialList" hidden>
+    <button class="dial-it" data-go="nueva"><span>Nueva misión</span><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></i></button>
+    <button class="dial-it" data-go="walk"><span id="dialWalkTxt">Paseo con Vaca</span><i class="vaca-ico" id="vacaIco"></i></button>
+    <button class="dial-it" data-go="misiones"><span>Misiones</span><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="4" cy="6" r="1.6" fill="currentColor"/><circle cx="4" cy="12" r="1.6" fill="currentColor"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/></svg></i></button>
+    <button class="dial-it" data-go="duelo"><span>Duelo</span><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 14v3M8 20h8M9 17h6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></i></button>
+    <button class="dial-it" data-go="diario"><span>Diario</span><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 9h6M9 13h6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></i></button>
+    <button class="dial-it" data-go="stats"><span>Stats y logros</span><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V12M12 20V5M19 20v-9" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></i></button>
+  </div>
+  <button class="dial-main" id="dialMain" aria-expanded="false" aria-label="Abrir menú">
+    <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+  </button>
+</div>
+
 
 <div class="modal" id="modal" hidden><div class="mcard" id="modalBody" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="snack" id="snack" hidden></div>
 <input type="file" id="impF" accept="application/json,.json" hidden>
 
 <div class="intro" id="intro" hidden>

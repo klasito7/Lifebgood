@@ -14,6 +14,9 @@ Misiones en la vida real sobre el mapa de tu barrio. Cada día aparecen misiones
 - **Escudo de racha**: un día sin XP por semana no te corta la racha. Se recarga cada lunes.
 - **Diario**: al cumplir una misión anotás qué pasó; queda todo en la pestaña Diario.
 - **Duelo semanal**: creás un código, se lo pasás a un amigo y los dos reciben los mismos 5 retos (2 que verifica la app y 3 donde la prueba es lo que escribís). Se pasan el resultado como código por WhatsApp y la app compara. Sin servidor.
+- **Hallazgos**: cada 30 minutos aparecen cosas cerca tuyo (bolsas de vaccoins, energía, cofres y, a veces, sobres de Vaca o de Vélez). Se agarran solas al pasar caminando. Hasta 25 por día.
+- **Conexión con FUNVS**: los vaccoins de hallazgos y niveles (50 por nivel), los sobres y los paseos de Vaca van a tu Colección de FUNVS. Lifebgood escribe `lifebgood.json` en el mismo Gist privado de la Colección y FUNVS lo lee al sincronizar (cada cosa entra una sola vez; tope de 60 vaccoins por día). Se conecta en Stats → FUNVS con el mismo token de GitHub de FUNVS (si FUNVS está abierto en el mismo navegador, lo toma solo).
+- **Menú**: todo se abre desde el botón de abajo a la derecha, que despliega las opciones.
 - Logros (en Stats).
 - Copia de seguridad (exportar e importar).
 - Skins: Clásica y Hacker (en Stats → Skin).
