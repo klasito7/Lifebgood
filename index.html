@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17225a">
+<title>Lifebgood</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="map" aria-label="Mapa"></div>
+
+<header class="hud">
+  <div class="who">
+    <div class="lv" id="lv" aria-label="Nivel">1</div>
+    <div class="xpw">
+      <div class="nm">Lifebgood</div>
+      <div class="bar"><i id="xpb"></i></div>
+      <div class="xpt" id="xpt">0 XP</div>
+    </div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="gps">Sin ubicación</span>
+    <span class="chip" id="kmHoy">0,0 km hoy</span>
+  </div>
+</header>
+
+<button class="fab" id="centrar" aria-label="Centrar el mapa en mí">
+  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2"/></svg>
+</button>
+
+<section class="sheet" id="sheet" hidden><div id="sheetBody"></div></section>
+
+<nav class="tabs" aria-label="Secciones">
+  <button data-tab="mapa" aria-selected="true">Mapa</button>
+  <button data-tab="misiones" aria-selected="false">Misiones</button>
+  <button data-tab="stats" aria-selected="false">Stats</button>
+  <button data-tab="logros" aria-selected="false">Logros</button>
+</nav>
+
+<div class="modal" id="modal" hidden><div class="mcard" id="modalBody" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="impF" accept="application/json,.json" hidden>
+
+<div class="intro" id="intro" hidden>
+  <div class="in">
+    <div class="hero-big" id="heroBig"></div>
+    <h1>Lifebgood</h1>
+    <p>Tu barrio es el mapa. Cada día aparecen misiones en kioscos, plazas, panaderías y heladerías reales. Para cumplirlas tenés que ir: cuando estés ahí, tocás <b>Estoy acá</b> y te quedás 20 segundos.</p>
+    <p class="small">Tu ubicación no se guarda ni se manda a ningún lado. Solo se le pregunta a OpenStreetMap qué lugares hay en tu zona, con un punto redondeado a unos 500 m. El progreso vive en tu celu.</p>
+    <button class="big" id="goGps">Empezar</button>
+    <button class="ghost" id="goDemo">Probar sin GPS</button>
+  </div>
+</div>
+
+<div class="intro" id="err" hidden>
+  <div class="in">
+    <h1>Necesito tu ubicación</h1>
+    <p id="errTxt">El navegador no me dejó usar el GPS.</p>
+    <p class="small">En el celu: tocá el candado al lado de la dirección, entrá a Permisos y activá Ubicación para este sitio. Después recargá la página.</p>
+    <button class="big" id="retry">Reintentar</button>
+    <button class="ghost" id="goDemo2">Probar sin GPS</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
