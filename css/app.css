@@ -106,3 +106,71 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--coral);outline-
 .in h1{text-align:center}
 .in .big{margin-top:18px}
 [hidden]{display:none!important}
+
+/* selector de skin */
+.ghost.skin[aria-pressed=true]{border-color:var(--coral);color:var(--coral);font-weight:600}
+
+/* ================= SKIN HACKER =================
+   terminal verde sobre negro, mapa en modo noche, letra de consola y líneas de monitor */
+:root[data-skin=hacker]{--cob:#020a04;--cob2:#06170b;--cob3:#0b2414;--coral:#00ff66;--mint:#39ff88;--blue:#00e5ff;--cyan:#7dffb0;--gold:#d4ff00;--ink:#b6ffcb;--mute:#3fbf6a;--grey:#0f3a1d;--glow:0 0 6px rgba(0,255,102,.55)}
+:root[data-skin=hacker] body{font-family:'Share Tech Mono',ui-monospace,monospace;background:#020a04}
+:root[data-skin=hacker] h1,:root[data-skin=hacker] h2,:root[data-skin=hacker] h3,:root[data-skin=hacker] .nm,:root[data-skin=hacker] .lv,
+:root[data-skin=hacker] .big,:root[data-skin=hacker] .rw,:root[data-skin=hacker] .st b,:root[data-skin=hacker] .poi,:root[data-skin=hacker] .medal,
+:root[data-skin=hacker] .toast,:root[data-skin=hacker] .hold p,:root[data-skin=hacker] .okmsg{font-family:'VT323',ui-monospace,monospace;letter-spacing:.02em}
+:root[data-skin=hacker] h1{font-size:52px}
+:root[data-skin=hacker] h2{font-size:30px}
+:root[data-skin=hacker] h3{font-size:24px}
+:root[data-skin=hacker] h1,:root[data-skin=hacker] h2,:root[data-skin=hacker] h3,:root[data-skin=hacker] .nm,:root[data-skin=hacker] .okmsg{color:var(--coral);text-shadow:var(--glow)}
+:root[data-skin=hacker] h2::before,:root[data-skin=hacker] h3::before{content:'> ';opacity:.7}
+:root[data-skin=hacker] .nm{font-size:20px}
+:root[data-skin=hacker] .nm::before{content:'root@';opacity:.6}
+:root[data-skin=hacker] .nm::after{content:'_';animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* paneles con borde de terminal */
+:root[data-skin=hacker] .who,:root[data-skin=hacker] .chip,:root[data-skin=hacker] .fab,:root[data-skin=hacker] .sheet,:root[data-skin=hacker] .mcard,:root[data-skin=hacker] .tabs,:root[data-skin=hacker] .lv{border-color:var(--coral);box-shadow:var(--glow),0 0 0 1px rgba(0,255,102,.15) inset;border-radius:4px}
+:root[data-skin=hacker] .sheet,:root[data-skin=hacker] .mcard{border-radius:6px 6px 0 0}
+:root[data-skin=hacker] .lv{background:transparent;color:var(--coral);text-shadow:var(--glow);font-size:32px}
+:root[data-skin=hacker] .bar{background:#0b2414;border-radius:0}
+:root[data-skin=hacker] .bar i{box-shadow:var(--glow)}
+:root[data-skin=hacker] .chip.ok::before{background:var(--coral);box-shadow:var(--glow)}
+:root[data-skin=hacker] .fab{color:var(--coral)}
+:root[data-skin=hacker] .fab.on{background:var(--coral);color:#001a08}
+:root[data-skin=hacker] .tabs button{text-transform:lowercase}
+:root[data-skin=hacker] .tabs button[aria-selected=true]{color:var(--coral);text-shadow:var(--glow);box-shadow:inset 0 3px 0 var(--coral)}
+:root[data-skin=hacker] .tabs button[aria-selected=true]::before{content:'[';opacity:.7}
+:root[data-skin=hacker] .tabs button[aria-selected=true]::after{content:']';opacity:.7}
+
+/* botones */
+:root[data-skin=hacker] .big{background:var(--coral);color:#001a08;border-color:var(--coral);border-radius:4px;font-size:30px;box-shadow:var(--glow)}
+:root[data-skin=hacker] .big[data-far]{background:transparent;color:var(--mute);border-color:var(--grey);box-shadow:none}
+:root[data-skin=hacker] .ghost{border-color:var(--grey);border-radius:4px;color:var(--ink)}
+:root[data-skin=hacker] .tag{border-radius:2px;border-color:var(--grey)}
+:root[data-skin=hacker] .mi,:root[data-skin=hacker] .st,:root[data-skin=hacker] .ach{border-radius:4px;border:1px solid var(--grey)}
+:root[data-skin=hacker] .lnk{color:var(--blue)}
+
+/* marcadores del mapa */
+:root[data-skin=hacker] .poi{background:#020a04;border:2px solid #1f7a3f;color:#7dffb0;border-radius:3px;font-size:20px;box-shadow:0 0 6px rgba(31,122,63,.7)}
+:root[data-skin=hacker] .poi.r-r{border-color:var(--blue);color:var(--blue);box-shadow:0 0 8px rgba(0,229,255,.7)}
+:root[data-skin=hacker] .poi.r-e{border-color:var(--coral);color:var(--coral);box-shadow:0 0 10px rgba(0,255,102,.9)}
+:root[data-skin=hacker] .poi.ok{background:var(--coral);border-color:var(--coral);color:#001a08}
+:root[data-skin=hacker] .me-in{filter:drop-shadow(0 0 4px rgba(0,255,102,.8))}
+:root[data-skin=hacker] .medal{background:var(--coral);border-color:var(--coral);color:#001a08;border-radius:3px;font-size:22px}
+:root[data-skin=hacker] .ach.off .medal{background:transparent;color:var(--mute);border-color:var(--grey)}
+
+/* mapa en modo noche verde */
+:root[data-skin=hacker] #map{background:#020a04}
+:root[data-skin=hacker] .leaflet-tile-pane{filter:grayscale(1) invert(1) brightness(.62) contrast(1.4) sepia(1) hue-rotate(75deg) saturate(3.2)}
+:root[data-skin=hacker] .leaflet-control-attribution{background:rgba(2,10,4,.8)!important;color:var(--mute)}
+:root[data-skin=hacker] .leaflet-control-attribution a{color:var(--coral)}
+
+/* aviso y bienvenida */
+:root[data-skin=hacker] .toast{background:#020a04;color:var(--coral);border-color:var(--coral);border-radius:4px;font-size:24px;box-shadow:var(--glow)}
+:root[data-skin=hacker] .toast::before{content:'> ';opacity:.7}
+:root[data-skin=hacker] .modal{background:rgba(0,8,2,.65)}
+:root[data-skin=hacker] .intro{background:#020a04}
+:root[data-skin=hacker] .hero-big{filter:drop-shadow(0 0 10px rgba(0,255,102,.6))}
+
+/* líneas de monitor CRT sobre todo */
+:root[data-skin=hacker] body::after{content:'';position:fixed;inset:0;z-index:5000;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
+@media(prefers-reduced-motion:reduce){:root[data-skin=hacker] .nm::after{animation:none}}

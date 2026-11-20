@@ -9,6 +9,7 @@ Misiones en la vida real sobre el mapa de tu barrio. Cada día aparecen misiones
 - Estadísticas: km caminados (solo a pie: más de ~10 km/h no cuenta), lugares descubiertos, zonas pisadas, racha, últimos 7 días, por tipo y rareza.
 - 12 logros.
 - Copia de seguridad (exportar e importar).
+- Skins: Clásica y Hacker (en Stats → Skin).
 - Modo prueba sin GPS: `index.html#demo` (tocás el mapa para moverte; guarda su progreso aparte).
 
 ## Privacidad

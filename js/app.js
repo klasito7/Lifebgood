@@ -32,18 +32,36 @@ load();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* lleno o bloqueado */ } };
 
 /* ---------- sprites ---------- */
-const PAL = { h: '#3a2418', s: '#e2a877', e: '#111', w: '#f4f6ff', b: '#2448d8', p: '#2a3150', k: '#151515' };
+const PAL = { h: '#3a2418', s: '#e2a877', e: '#111', w: '#f4f6ff', b: '#2448d8', p: '#2a3150', k: '#151515', d: '#0e2a17', n: '#020604', g: '#00ff66', q: '#163a22' };
 const HERO = ['....hhhh....', '...hhhhhh...', '...hssssh...', '...sesses...', '...ssssss...', '....ssss....', '..wbwwwwbw..', '.swwbwwbwws.', '.swwwbbwwws.', '.s.wwwwww.s.', '...wwwwww...', '...pppppp...', '...pp..pp...', '...pp..pp...', '..kkk..kkk..'];
 const sprite = rows => `<svg viewBox="0 0 ${rows[0].length} ${rows.length}" shape-rendering="crispEdges" width="100%" height="100%" aria-hidden="true">${rows.map((r, y) => [...r].map((c, x) => c === '.' ? '' : `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${PAL[c]}"/>`).join('')).join('')}</svg>`;
-$('#heroBig').innerHTML = sprite(HERO);
+// skin hacker: capucha negra, cara en sombra y ojos verdes
+const HERO_H = ['...dddddd...', '..dddddddd..', '..ddnnnndd..', '..dngnngnd..', '..ddnnnndd..', '...dnnnnd...', '..dddddddd..', '.dddddddddd.', '.dddggggddd.', '.d.dddddd.d.', '...dddddd...', '...qqqqqq...', '...qq..qq...', '...qq..qq...', '..kkk..kkk..'];
+const SKIN_KEY = 'lifebgood-skin';
+const hacker = () => document.documentElement.dataset.skin === 'hacker';
+const heroSprite = () => sprite(hacker() ? HERO_H : HERO);
+$('#heroBig').innerHTML = heroSprite();
 
 /* ---------- mapa ---------- */
 const map = L.map('map', { zoomControl: false }).setView(DEMO_POS, 15);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
-const me = L.marker(DEMO_POS, { icon: L.divIcon({ className: 'lb-icon', html: `<div class="me-in">${sprite(HERO)}</div>`, iconSize: [30, 38], iconAnchor: [15, 36] }), zIndexOffset: 1000, interactive: false, keyboard: false });
-const accC = L.circle(DEMO_POS, { radius: 0, color: '#2448d8', weight: 1, fillOpacity: .08, interactive: false });
+const meIcon = () => L.divIcon({ className: 'lb-icon', html: `<div class="me-in">${heroSprite()}</div>`, iconSize: [30, 38], iconAnchor: [15, 36] });
+const me = L.marker(DEMO_POS, { icon: meIcon(), zIndexOffset: 1000, interactive: false, keyboard: false });
+const accC = L.circle(DEMO_POS, { radius: 0, color: hacker() ? '#00ff66' : '#2448d8', weight: 1, fillOpacity: .08, interactive: false });
 const layer = L.layerGroup().addTo(map);
 const RCOL = { c: '#5b6596', r: '#2f55e0', e: '#e2392d' };
+const RCOL_H = { c: '#1f7a3f', r: '#00e5ff', e: '#00ff66' };
+const rcol = r => (hacker() ? RCOL_H : RCOL)[r];
+
+function setSkin(k) {
+  document.documentElement.dataset.skin = k;
+  try { localStorage.setItem(SKIN_KEY, k); } catch (e) { /* sin almacenamiento */ }
+  document.querySelector('meta[name=theme-color]').content = k === 'hacker' ? '#020a04' : '#17225a';
+  me.setIcon(meIcon()); $('#heroBig').innerHTML = heroSprite();
+  accC.setStyle({ color: k === 'hacker' ? '#00ff66' : '#2448d8' });
+  draw(); renderSheet();
+  toast(k === 'hacker' ? 'Acceso concedido' : 'Skin clásica');
+}
 
 let pos = null, demo = false, first = true, follow = true, last = null, fetching = false, failAt = 0, watchId = null;
 map.on('dragstart', () => { follow = false; $('#centrar').classList.add('on'); });
@@ -170,7 +188,7 @@ function draw() {
   layer.clearLayers();
   for (const m of S.missions) {
     const T = D.TYPES[m.type];
-    if (m.st !== 'done') L.circle(m.ll, { radius: T.r, color: RCOL[m.rar], weight: 2, dashArray: '4 6', fill: false, interactive: false }).addTo(layer);
+    if (m.st !== 'done') L.circle(m.ll, { radius: T.r, color: rcol(m.rar), weight: 2, dashArray: '4 6', fill: false, interactive: false }).addTo(layer);
     L.marker(m.ll, { icon: L.divIcon({ className: 'lb-icon', html: `<div class="poi r-${m.rar}${m.st === 'done' ? ' ok' : ''}">${m.st === 'done' ? '✓' : T.g}</div>`, iconSize: [34, 34], iconAnchor: [17, 17] }), title: m.txt })
       .on('click', () => openMission(m.id)).addTo(layer);
   }
@@ -281,6 +299,7 @@ function vStats() {
   <h3>Atributos</h3>${Object.keys(D.ATTR).map(k => `<div class="row"><span>${D.ATTR[k]}</span><div class="bar" style="--c:${ACOL[k]}"><i style="width:${mxa ? (S.at[k] || 0) / mxa * 100 : 0}%"></i></div><span>${S.at[k] || 0} XP</span></div>`).join('')}
   <h3>Por tipo de lugar</h3>${rows(Object.keys(D.TYPES).map(k => [D.TYPES[k].n, bt[k] || 0, (bt[k] || 0) + ' misiones']), mxt, 'var(--blue)')}
   <h3>Por rareza</h3><p class="mute">Comunes ${br.c || 0} · Raras ${br.r || 0} · Épicas ${br.e || 0}</p>
+  <h3>Skin</h3><div class="btns">${[['clasica', 'Clásica'], ['hacker', 'Hacker']].map(([k, n]) => `<button class="ghost skin" data-skin="${k}" aria-pressed="${(document.documentElement.dataset.skin || 'clasica') === k}">${n}</button>`).join('')}</div>
   <h3>Tus datos</h3><p class="mute">Todo queda guardado en este navegador. Hacé una copia de vez en cuando por si cambiás de celu.</p>
   <div class="btns"><button class="ghost" id="exp">Exportar copia</button><button class="ghost" id="imp">Importar copia</button></div>
   <button class="ghost" id="wipe">Borrar todo el progreso</button>`;
@@ -320,6 +339,7 @@ document.addEventListener('click', async e => {
   if (!b) return;
   if (b.dataset.tab) return setTab(b.dataset.tab);
   if (b.dataset.open) return openMission(b.dataset.open);
+  if (b.dataset.skin) return setSkin(b.dataset.skin);
   switch (b.id) {
     case 'here': {
       const m = S.missions.find(x => x.id === openM);
@@ -360,6 +380,7 @@ setInterval(() => { if (hold) tickHold(); }, 250);
 setInterval(() => { dayCheck(); if (tab === 'misiones') renderSheet(); }, 60000);
 
 /* ---------- arranque ---------- */
+if (hacker()) document.querySelector('meta[name=theme-color]').content = '#020a04';
 hud(); dayCheck(); draw();
 if (location.hash === '#demo') startDemo();
 else if (S.intro) startGPS();
