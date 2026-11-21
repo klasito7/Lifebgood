@@ -187,8 +187,8 @@ function gen(reroll) {
 function dayCheck() {
   const t = today();
   if (S.found && Object.keys(S.found).length > 200) cleanFinds();
-  const old = S.tasks.filter(x => x.date < t);
-  if (old.length) { S.expired += old.filter(x => x.st === 'open').length; S.tasks = S.tasks.filter(x => x.date >= t); save(); }
+  const old = S.tasks.filter(x => x.date && x.date < t);
+  if (old.length) { S.expired += old.filter(x => x.st === 'open').length; S.tasks = S.tasks.filter(x => !x.date || x.date >= t); save(); }
   if (S.dailies.length) { const n = S.tasks.length; ensureDailies(); if (S.tasks.length !== n) save(); }
   if (S.day && S.day !== t) {
     S.expired += S.missions.filter(m => m.st !== 'done').length;
@@ -311,13 +311,14 @@ async function addTask(text, over) {
 
 function completeTask(id, silent) {
   const t = S.tasks.find(x => x.id === id);
-  if (!t || t.st !== 'open' || t.date !== today()) return;
+  if (!t || t.st !== 'open' || (t.date && t.date !== today())) return;
   const before = lvl(S.xp).L, now = new Date();
   const late = !!t.time && Math.abs(now.getHours() * 60 + now.getMinutes() - minsOf(t.time)) > 60;
   const xp = (late ? Math.round(t.xp / 2) : t.xp) * xpMult(), d = today();
   t.st = 'done'; t.got = xp; t.late = late;
   S.xp += xp; S.at[t.a] = (S.at[t.a] || 0) + xp; S.xpDay[d] = (S.xpDay[d] || 0) + xp;
   S.log.push({ t: d, h: nowHM(), type: 'agenda', kind: t.kind, a: t.a, xp, txt: t.title, late });
+  if (t.src === 'gtask') gtaskDone(t, true).then(() => { if (t.gpend) toast('Se cumplió acá; la tacho en Google cuando vuelva a sincronizar'); });
   save(); hud(); renderSheet();
   if (silent) return;
   offerNote(S.log.length - 1);
@@ -328,7 +329,7 @@ function completeTask(id, silent) {
 function removeTask(id) {
   const t = S.tasks.find(x => x.id === id); if (!t) return;
   if (t.src === 'daily') { S.dailies = S.dailies.filter(d => d.id !== t.did); S.tasks = S.tasks.filter(x => x.did !== t.did || x.st === 'done'); toast('Diaria eliminada'); }
-  else if (t.src === 'cal' || t.src === 'velez') { t.st = 'hidden'; toast(t.src === 'cal' ? 'Oculta (sigue en tu calendario)' : 'Oculta'); }
+  else if (t.src === 'cal' || t.src === 'velez' || t.src === 'gtask') { t.st = 'hidden'; toast(t.src === 'cal' ? 'Oculta (sigue en tu calendario)' : t.src === 'gtask' ? 'Oculta (sigue en Google Tasks)' : 'Oculta'); }
   else S.tasks = S.tasks.filter(x => x.id !== id);
   save(); renderSheet();
 }
@@ -364,20 +365,24 @@ function vSug() {
 function vAgenda() {
   const t = today();
   const td = S.tasks.filter(x => x.date === t && x.st !== 'hidden').sort(byTime);
+  const nod = S.tasks.filter(x => !x.date && x.st === 'open');
   const fut = S.tasks.filter(x => x.date > t && x.st !== 'hidden').sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b));
   const sync = S.gcal.cid ? `<button class="ghost slim" id="gsync2">Sincronizar Google Calendar${S.gcal.last ? ' · ' + ago(S.gcal.last) : ''}</button>` : '';
   const row = x => `<li class="ag ${x.st} k-${x.kind}"><div class="agt">${x.time || '—'}</div><div class="agb"><b>${esc(x.title)}</b><div class="tags">${x.st === 'open'
       ? `<button type="button" class="tag tb k-${x.kind}" data-tkind="${esc(x.id)}">${KN[x.kind]}</button><button type="button" class="tag tb" data-tattr="${esc(x.id)}" style="border-color:${ACOLS[x.a]}">${D.ATTR[x.a]}</button><span class="tag">+${x.xp} XP</span>`
-      : `<span class="tag k-${x.kind}">${KN[x.kind]}</span><span class="tag">+${x.got} XP${x.late ? ' (tarde)' : ''}</span>`}${x.src === 'cal' ? '<span class="tag">Calendar</span>' : ''}</div></div>${x.st === 'done' ? '<span class="agok">✓</span>' : `<div class="agac"><button class="agdo" data-done="${esc(x.id)}">Hecha</button><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div>`}</li>`;
+      : `<span class="tag k-${x.kind}">${KN[x.kind]}</span><span class="tag">+${x.got} XP${x.late ? ' (tarde)' : ''}</span>`}${x.src === 'cal' ? `<span class="tag" style="border-color:${esc(x.color || '')}">${esc(x.cal || 'Calendar')}</span>` : x.src === 'gtask' ? `<span class="tag">${x.late ? 'Atrasada · ' : ''}Tasks</span>` : ''}</div></div>${x.st === 'done' ? '<span class="agok">✓</span>' : `<div class="agac"><button class="agdo" data-done="${esc(x.id)}">Hecha</button><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div>`}</li>`;
   return sync + (td.length ? `<ul class="agl">${td.map(row).join('')}</ul>` : '<p class="mute">Nada cargado para hoy. Escribí arriba tu primera misión.</p>')
-    + (fut.length ? `<h3>Próximos días</h3><ul class="agl">${fut.map(x => `<li class="ag fut k-${x.kind}"><div class="agt">${fmtDay(x.date)}<small>${x.time || ''}</small></div><div class="agb"><b>${esc(x.title)}</b><div class="tags"><span class="tag k-${x.kind}">${KN[x.kind]}</span>${x.src === 'cal' ? '<span class="tag">Calendar</span>' : ''}</div></div><div class="agac"><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div></li>`).join('')}</ul>` : '');
+    + (nod.length ? `<h3>Tareas sin fecha</h3><ul class="agl">${nod.map(row).join('')}</ul>` : '')
+    + (fut.length ? `<h3>Próximos días</h3><ul class="agl">${fut.map(x => `<li class="ag fut k-${x.kind}"><div class="agt">${fmtDay(x.date)}<small>${x.time || ''}</small></div><div class="agb"><b>${esc(x.title)}</b><div class="tags"><span class="tag k-${x.kind}">${KN[x.kind]}</span>${x.src === 'cal' ? `<span class="tag">${esc(x.cal || 'Calendar')}</span>` : x.src === 'gtask' ? '<span class="tag">Tasks</span>' : ''}</div></div><div class="agac"><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div></li>`).join('')}</ul>` : '');
 }
 
 /* ---------- Google Calendar (todo pasa entre tu celu y Google) ---------- */
-const GSCOPE = 'https://www.googleapis.com/auth/calendar.events';
+// Permisos: eventos de tus calendarios, la lista de calendarios (para elegir cuáles entran) y Google Tasks.
+const GSCOPE = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/tasks';
+const GSV = 2; // si cambian los permisos, se vuelve a pedir acceso una vez
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let gTok = null;
-try { const t = JSON.parse(sessionStorage.getItem('lb-gtok') || 'null'); if (t && t.exp > Date.now()) gTok = t; } catch (e) { /* nada */ }
+try { const t = JSON.parse(sessionStorage.getItem('lb-gtok') || 'null'); if (t && t.exp > Date.now() && t.sv === GSV) gTok = t; } catch (e) { /* nada */ }
 function loadGis() {
   return new Promise((res, rej) => {
     if (window.google && google.accounts && google.accounts.oauth2) return res();
@@ -392,10 +397,10 @@ async function getToken(interactive) {
   await loadGis();
   return new Promise((res, rej) => {
     const c = google.accounts.oauth2.initTokenClient({
-      client_id: S.gcal.cid, scope: GSCOPE,
+      client_id: S.gcal.cid, scope: GSCOPE, include_granted_scopes: true,
       callback: r => {
         if (r.error) return rej(new Error(r.error));
-        gTok = { v: r.access_token, exp: Date.now() + (Number(r.expires_in || 3600) - 60) * 1000 };
+        gTok = { v: r.access_token, exp: Date.now() + (Number(r.expires_in || 3600) - 60) * 1000, sv: GSV, scope: r.scope || GSCOPE };
         try { sessionStorage.setItem('lb-gtok', JSON.stringify(gTok)); } catch (e) { /* nada */ }
         res(gTok.v);
       },
@@ -404,23 +409,28 @@ async function getToken(interactive) {
     c.requestAccessToken({ prompt: '' });
   });
 }
-async function gfetch(path, opt, interactive) {
+const hasScope = s => !gTok || !gTok.scope || gTok.scope.includes(s);
+async function gget(url, opt, interactive) {
   const tok = await getToken(interactive);
   if (!tok) throw new Error('notoken');
-  const r = await fetch('https://www.googleapis.com/calendar/v3' + path, Object.assign({}, opt, { headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } }));
+  const r = await fetch(url, Object.assign({}, opt, { headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } }));
   if (r.status === 401) { gTok = null; try { sessionStorage.removeItem('lb-gtok'); } catch (e) { /* nada */ } throw new Error('401'); }
-  if (!r.ok) throw new Error('g' + r.status);
+  if (!r.ok) { let why = ''; try { why = JSON.stringify(await r.json()); } catch (e) { /* nada */ } const e = new Error('g' + r.status); e.why = why; throw e; }
   return r.status === 204 ? null : r.json();
 }
+const gfetch = (path, opt, interactive) => gget('https://www.googleapis.com/calendar/v3' + path, opt, interactive);
+const tfetch = (path, opt, interactive) => gget('https://tasks.googleapis.com/tasks/v1' + path, opt, interactive);
 function gErr(e) {
-  const m = String(e && e.message || e);
+  const m = String(e && e.message || e), why = (e && e.why) || '';
   return m === 'cid' ? 'Falta el ID de cliente de Google'
     : /popup/.test(m) ? 'Se cerró o se bloqueó la ventana de Google'
-    : m === 'access_denied' ? 'No le diste permiso al calendario'
+    : m === 'access_denied' ? 'No le diste permiso a Google'
     : m === '401' || m === 'notoken' ? 'Se venció el permiso: tocá Sincronizar de nuevo'
     : m === 'gis' ? 'No pude cargar el acceso de Google'
-    : m === 'g403' ? 'Google rechazó el pedido: revisá que la API de Calendar esté habilitada'
-    : 'Error con Google Calendar (' + m + ')';
+    : m === 'g403' && /tasks/i.test(why) && /disabled|not been used|accessNotConfigured/i.test(why) ? 'Falta habilitar la API de Google Tasks en tu proyecto de Google Cloud'
+    : m === 'g403' && /insufficient|scope/i.test(why) ? 'Faltan permisos: tocá Sincronizar y aceptá todo en la ventana de Google'
+    : m === 'g403' ? 'Google rechazó el pedido: revisá que las APIs estén habilitadas'
+    : 'Error con Google (' + m + ')';
 }
 function gEvent(p) {
   const ev = { summary: KNUM[p.kind] + ' ' + p.title, description: 'Creado desde Lifebgood' };
@@ -435,41 +445,115 @@ function gEvent(p) {
   if (p.kind === 'd') ev.recurrence = ['RRULE:FREQ=DAILY'];
   return ev;
 }
+// tipo final: número en el título > lo aprendido > el tipo del calendario o lista > secundaria
+const pickKind = (p, def) => { const k = p.pk || p.known ? p.kind : def && def !== 'auto' ? def : p.kind; return k === 'd' ? 's' : k; };
+
+/* calendarios y listas de tareas que existen en tu cuenta */
+async function loadSources(interactive) {
+  const cl = await gfetch('/users/me/calendarList?minAccessRole=reader&maxResults=100', {}, interactive);
+  const old = S.gcal.cals || {}; const cals = {};
+  for (const c of cl.items || []) {
+    const o = old[c.id] || {};
+    cals[c.id] = { name: c.primary ? 'Mi calendario' : (c.summaryOverride || c.summary || 'Calendario').slice(0, 40), color: c.backgroundColor || '#7d97ff', primary: !!c.primary, on: o.on != null ? o.on : !!c.primary, kind: o.kind || 'auto' };
+  }
+  S.gcal.cals = cals;
+  try {
+    const tl = await tfetch('/users/@me/lists?maxResults=50', {}, interactive);
+    const oldL = S.gcal.lists || {}; const lists = {};
+    for (const l of tl.items || []) { const o = oldL[l.id] || {}; lists[l.id] = { name: (l.title || 'Tareas').slice(0, 40), on: o.on != null ? o.on : true, kind: o.kind || 'auto' }; }
+    S.gcal.lists = lists; S.gcal.tasksErr = '';
+  } catch (e) { S.gcal.tasksErr = gErr(e); }
+  S.gcal.srcAt = Date.now(); save();
+}
+
 let syncing = false;
 async function syncCal(interactive) {
   if (syncing || !S.gcal.cid) return;
   syncing = true;
   try {
+    if (!S.gcal.cals || !Object.keys(S.gcal.cals).length || Date.now() - (S.gcal.srcAt || 0) > 864e5) await loadSources(interactive);
     const a = new Date(); a.setHours(0, 0, 0, 0); const b = new Date(a); b.setDate(b.getDate() + 8);
-    const j = await gfetch(`/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=250&timeMin=${encodeURIComponent(a.toISOString())}&timeMax=${encodeURIComponent(b.toISOString())}`, {}, interactive);
-    const own = new Set([...S.tasks.filter(x => x.src !== 'cal'), ...S.dailies].map(x => x.gid).filter(Boolean));
+    const own = new Set([...S.tasks.filter(x => x.src === 'manual' || x.src === 'daily'), ...S.dailies].map(x => x.gid).filter(Boolean));
+    const tasksOn = Object.values(S.gcal.lists || {}).some(l => l.on);
+    const taskTime = {}; // tareas de Google que el calendario muestra con hora: la hora se la pasamos a la tarea
     const seen = new Set(); let n = 0;
-    for (const ev of j.items || []) {
-      if (ev.status === 'cancelled' || !ev.summary || own.has(ev.id) || own.has(ev.recurringEventId)) continue;
-      const st = ev.start || {};
-      if (!st.date && !st.dateTime) continue;
-      const date = st.date || dayKey(new Date(st.dateTime));
-      const time = st.dateTime ? new Date(st.dateTime).toTimeString().slice(0, 5) : null;
-      const p = P.parse(ev.summary, new Date(), S.learn);
-      const kind = p.kind === 'd' ? 's' : p.kind, id = 'g:' + ev.id;
-      seen.add(id); n++;
-      const t = S.tasks.find(x => x.id === id);
-      const data = { title: p.title || ev.summary, date, time, kind, a: p.a, xp: P.XP[kind] };
-      if (!t) S.tasks.push(Object.assign({ id, src: 'cal', gid: ev.id, st: 'open' }, data));
-      else if (t.st === 'open') Object.assign(t, data, p.known ? {} : { kind: t.kind, a: t.a, xp: t.xp });
-      else if (t.st === 'hidden') Object.assign(t, { date, time });
+    for (const [cid, cal] of Object.entries(S.gcal.cals || {})) {
+      if (!cal.on) continue;
+      const j = await gfetch(`/calendars/${encodeURIComponent(cid)}/events?singleEvents=true&orderBy=startTime&maxResults=250&timeMin=${encodeURIComponent(a.toISOString())}&timeMax=${encodeURIComponent(b.toISOString())}`, {}, interactive);
+      for (const ev of j.items || []) {
+        if (ev.status === 'cancelled' || !ev.summary || own.has(ev.id) || own.has(ev.recurringEventId)) continue;
+        const st = ev.start || {};
+        if (!st.date && !st.dateTime) continue;
+        const date = st.date || dayKey(new Date(st.dateTime));
+        const time = st.dateTime ? new Date(st.dateTime).toTimeString().slice(0, 5) : null;
+        if (tasksOn && /tasks\.google\.com\/task\//.test(ev.description || '')) { taskTime[P.key(ev.summary) + '|' + date] = time; continue; }
+        const p = P.parse(ev.summary, new Date(), S.learn), kind = pickKind(p, cal.kind), id = 'g:' + ev.id;
+        if (seen.has(id)) continue;
+        seen.add(id); n++;
+        const t = S.tasks.find(x => x.id === id);
+        const data = { title: p.title || ev.summary, date, time, kind, a: p.a, xp: P.XP[kind], cal: cal.name, color: cal.color };
+        if (!t) S.tasks.push(Object.assign({ id, src: 'cal', gid: ev.id, st: 'open' }, data));
+        else if (t.st === 'open') Object.assign(t, data, p.known ? {} : { kind: t.kind, a: t.a, xp: t.xp });
+        else if (t.st === 'hidden') Object.assign(t, { date, time });
+      }
     }
     S.tasks = S.tasks.filter(x => x.src !== 'cal' || x.st === 'done' || seen.has(x.id));
+    let nt = 0;
+    if (tasksOn) { try { nt = await syncTasks(interactive, taskTime); } catch (e) { S.gcal.tasksErr = gErr(e); } }
     S.gcal.last = Date.now(); save(); renderSheet();
-    if (interactive) toast(`Calendario sincronizado: ${n} eventos`);
+    if (interactive) toast(`Sincronizado: ${n} evento${n === 1 ? '' : 's'}${tasksOn ? ` y ${nt} tarea${nt === 1 ? '' : 's'}` : ''}`);
   } catch (e) { if (interactive) toast(gErr(e)); }
   syncing = false;
 }
+
+/* Google Tasks: trae las pendientes (con o sin fecha) y al cumplirlas las tacha en Google */
+async function syncTasks(interactive, taskTime) {
+  const seen = new Set(), t0 = today(); let n = 0;
+  for (const [lid, lst] of Object.entries(S.gcal.lists || {})) {
+    if (!lst.on) continue;
+    let page = '', guard = 0;
+    do {
+      const j = await tfetch(`/lists/${encodeURIComponent(lid)}/tasks?showCompleted=false&showHidden=false&maxResults=100${page ? '&pageToken=' + page : ''}`, {}, interactive);
+      for (const k of j.items || []) {
+        if (!k.title || !k.title.trim() || k.status === 'completed' || k.deleted) continue;
+        const due = k.due ? k.due.slice(0, 10) : '';            // Tasks solo guarda la fecha
+        const late = due && due < t0;
+        const date = !due ? '' : late ? t0 : due;              // las atrasadas pasan a hoy
+        const time = due ? (taskTime[P.key(k.title) + '|' + due] || null) : null;
+        const p = P.parse(k.title, new Date(), S.learn), kind = pickKind(p, lst.kind), id = 'k:' + k.id;
+        if (due && due > dayKey(new Date(Date.now() + 7 * 864e5))) continue; // más de una semana: todavía no
+        seen.add(id); n++;
+        const t = S.tasks.find(x => x.id === id);
+        const data = { title: p.title || k.title, date, time, kind, a: p.a, xp: P.XP[kind], late: !!late, cal: lst.name };
+        if (!t) S.tasks.push(Object.assign({ id, src: 'gtask', tid: k.id, lid, st: 'open' }, data));
+        else if (t.st === 'open') Object.assign(t, data, p.known ? {} : { kind: t.kind, a: t.a, xp: t.xp });
+      }
+      page = j.nextPageToken || '';
+    } while (page && ++guard < 5);
+  }
+  // reintentar las que cumpliste acá y no se pudieron tachar en Google
+  for (const t of S.tasks.filter(x => x.src === 'gtask' && x.st === 'done' && x.gpend)) await gtaskDone(t, interactive);
+  S.tasks = S.tasks.filter(x => x.src !== 'gtask' || x.st === 'done' || seen.has(x.id));
+  return n;
+}
+async function gtaskDone(t, interactive) {
+  try { await tfetch(`/lists/${encodeURIComponent(t.lid)}/tasks/${encodeURIComponent(t.tid)}`, { method: 'PATCH', body: JSON.stringify({ status: 'completed' }) }, interactive); t.gpend = false; }
+  catch (e) { t.gpend = true; }
+  save();
+}
+
+const KSEL = [['auto', 'Automático'], ['p', 'Principal'], ['s', 'Secundaria']];
 function vGcal() {
-  if (!S.gcal.cid) return `<h3>Google Calendar</h3><p class="mute">Pegá el ID de cliente de tu proyecto de Google Cloud. La guía paso a paso está en el README del repo.</p>
+  if (!S.gcal.cid) return `<h3>Google Calendar y Tasks</h3><p class="mute">Pegá el ID de cliente de tu proyecto de Google Cloud. La guía paso a paso está en el README del repo.</p>
     <div class="row2"><input id="gcid" placeholder="xxxx.apps.googleusercontent.com" aria-label="ID de cliente de Google" autocomplete="off"><button class="ghost" id="gsave">Guardar</button></div>`;
-  return `<h3>Google Calendar</h3><p class="mute">${S.gcal.last ? 'Última sincronización: ' + ago(S.gcal.last) + '.' : 'Todavía no sincronizaste.'} Trae tus eventos de hoy a 7 días como misiones. Poné "1", "2" o "3" al principio del título del evento para elegir el tipo.</p>
+  const cals = Object.entries(S.gcal.cals || {}), lists = Object.entries(S.gcal.lists || {});
+  const src = (kind, id, o) => `<div class="src${o.on ? ' on' : ''}"><button type="button" class="srct" data-src="${kind}" data-sid="${esc(id)}" aria-pressed="${o.on}">${o.color ? `<i style="background:${esc(o.color)}"></i>` : ''}<span>${esc(o.name)}</span></button>
+    ${o.on ? `<div class="srck">${KSEL.map(([k, n]) => `<button type="button" class="tag tb" data-srck="${kind}" data-sid="${esc(id)}" data-k="${k}" aria-pressed="${o.kind === k}">${n}</button>`).join('')}</div>` : ''}</div>`;
+  return `<h3>Google Calendar y Tasks</h3><p class="mute">${S.gcal.last ? 'Última sincronización: ' + ago(S.gcal.last) + '.' : 'Todavía no sincronizaste.'} Trae eventos y tareas de hoy a 7 días; las tareas sin fecha van aparte.</p>
     <div class="btns"><button class="ghost" id="gsync">Sincronizar ahora</button><button class="ghost" id="gwrite" aria-pressed="${!!S.gcal.write}">Agendar lo que cargo: ${S.gcal.write ? 'Sí' : 'No'}</button></div>
+    ${cals.length ? `<p class="mute" style="margin-top:12px"><b>Calendarios.</b> Tocá para elegir cuáles entran. "Automático" usa el número del título (1, 2 o 3) o lo que aprendió; si no, secundaria.</p>${cals.map(([id, o]) => src('cal', id, o)).join('')}` : '<p class="mute" style="margin-top:12px">Tocá Sincronizar para ver tus calendarios y listas de tareas.</p>'}
+    ${lists.length ? `<p class="mute" style="margin-top:12px"><b>Listas de Google Tasks.</b> Al cumplir una tarea acá, se tacha sola en Google.</p>${lists.map(([id, o]) => src('list', id, o)).join('')}` : ''}
+    ${S.gcal.tasksErr ? `<p class="mute">⚠ Tasks: ${esc(S.gcal.tasksErr)}</p>` : ''}
     <button class="ghost" id="gforget">Desconectar</button>`;
 }
 
@@ -1400,6 +1484,8 @@ document.addEventListener('click', async e => {
   if (b.dataset.skin) return setSkin(b.dataset.skin);
   if (b.dataset.done) return completeTask(b.dataset.done);
   if (b.dataset.note) { $('#snack').hidden = true; return askNote(+b.dataset.note); }
+  if (b.dataset.src) { const box = b.dataset.src === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.on = !o.on; save(); renderSheet(); } return; }
+  if (b.dataset.srck) { const box = b.dataset.srck === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.kind = b.dataset.k; save(); renderSheet(); } return; }
   if (b.dataset.act) return startAct(b.dataset.act);
   if (b.dataset.cruz != null) return cruz(b.dataset.cruz);
   if (b.dataset.vt) { hidePop(); return b.dataset.vt === '1' ? vacaTrain() : null; }
@@ -1484,7 +1570,7 @@ document.addEventListener('click', async e => {
     }
     case 'gsync': case 'gsync2': syncCal(true); break;
     case 'gwrite': S.gcal.write = !S.gcal.write; save(); renderSheet(); break;
-    case 'gforget': S.gcal = { cid: '', write: false, last: 0 }; gTok = null; try { sessionStorage.removeItem('lb-gtok'); } catch (err) { /* nada */ } S.tasks = S.tasks.filter(x => x.src !== 'cal' || x.st === 'done'); save(); renderSheet(); toast('Google Calendar desconectado'); break;
+    case 'gforget': S.gcal = { cid: '', write: false, last: 0 }; gTok = null; try { sessionStorage.removeItem('lb-gtok'); } catch (err) { /* nada */ } S.tasks = S.tasks.filter(x => (x.src !== 'cal' && x.src !== 'gtask') || x.st === 'done'); save(); renderSheet(); toast('Google desconectado'); break;
     case 'centrar': follow = true; b.classList.remove('on'); if (pos) map.setView(pos.ll, 17); break;
     case 'goGps': S.intro = true; save(); $('#intro').hidden = true; startGPS(); break;
     case 'retry': $('#err').hidden = true; startGPS(); break;

@@ -33,14 +33,14 @@ Misiones en la vida real sobre el mapa de tu barrio. Cada día aparecen misiones
 - Copia de seguridad (exportar e importar).
 - Skins: Clásica y Hacker (en Stats → Skin).
 - **Tu agenda** (pestaña Misiones): cargás misiones con texto, por ejemplo `1 pasear a Vaca a las 16`. 1 = principal (80 XP), 2 = secundaria (40 XP), 3 = diaria (20 XP, se repite todos los días). Entiende "hoy", "mañana", "el sábado", "24/11", "a las 16", "16:30", "19hs", "de la tarde". El atributo lo deduce de las palabras, y si lo corregís tocando la etiqueta, aprende para la próxima. Las que repetís aparecen como sugerencias. Si la marcás a más de 1 hora del horario, vale la mitad.
-- **Google Calendar** (opcional): trae tus eventos de hoy a 7 días como misiones y puede agendar en Google lo que cargás en la app.
+- **Google Calendar y Tasks** (opcional): elegís qué calendarios entran y qué tipo de misión es cada uno (Automático, Principal o Secundaria). Trae eventos y tareas de hoy a 7 días; las tareas atrasadas pasan a hoy y las sin fecha tienen su sección. Al cumplir una tarea en Lifebgood se tacha sola en Google Tasks. Puede agendar en Google lo que cargás en la app.
 - Modo prueba sin GPS: `index.html#demo` (tocás el mapa para moverte; guarda su progreso aparte).
 
 ## Conectar Google Calendar (una sola vez, unos 10 minutos)
 Google pide que cada app que lee un calendario esté registrada. Como esta app es tuya, la registrás vos y nadie más tiene acceso.
 
 1. Entrá a https://console.cloud.google.com con tu cuenta de Gmail y creá un proyecto nuevo llamado `Lifebgood`.
-2. Menú → **APIs y servicios → Biblioteca** → buscá **Google Calendar API** → **Habilitar**.
+2. Menú → **APIs y servicios → Biblioteca** → buscá **Google Calendar API** → **Habilitar**. Después buscá **Google Tasks API** → **Habilitar**.
 3. **APIs y servicios → Pantalla de consentimiento de OAuth** → tipo **Externo** → nombre `Lifebgood`, tu mail como soporte y contacto → guardá. En **Usuarios de prueba** agregá tu propio Gmail.
 4. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth** → tipo **Aplicación web**. En **Orígenes autorizados de JavaScript** poné `https://klasito7.github.io` (sin barra al final). No hace falta URI de redirección. Crear.
 5. Copiá el **ID de cliente** (termina en `.apps.googleusercontent.com`). No es secreto.

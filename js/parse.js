@@ -63,7 +63,7 @@
     const L = learned[key(title)];
     const a = L ? L.a : guessAttr(title);
     if (!kind) kind = L ? L.kind : 's';
-    return { title, kind, a, date: dayKey(date), time, xp: XP[kind], known: !!L };
+    return { title, kind, a, date: dayKey(date), time, xp: XP[kind], known: !!L, pk: !!mk };
   }
 
   const api = { parse, key, guessAttr, XP };
