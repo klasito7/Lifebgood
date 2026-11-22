@@ -55,6 +55,7 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, att
 const meIcon = () => L.divIcon({ className: 'lb-icon', html: `<div class="me-in">${heroSprite()}</div>`, iconSize: [30, 38], iconAnchor: [15, 36] });
 const me = L.marker(DEMO_POS, { icon: meIcon(), zIndexOffset: 1000, interactive: false, keyboard: false });
 const accC = L.circle(DEMO_POS, { radius: 0, color: hacker() ? '#00ff66' : '#2448d8', weight: 1, fillOpacity: .08, interactive: false });
+const magC = L.circle(DEMO_POS, { radius: 60, color: '#ffb800', weight: 2, dashArray: '3 7', fill: false, interactive: false });
 const layer = L.layerGroup().addTo(map);
 const RCOL = { c: '#5b6596', r: '#2f55e0', e: '#e2392d' };
 const RCOL_H = { c: '#1f7a3f', r: '#00e5ff', e: '#00ff66' };
@@ -96,8 +97,8 @@ function onPos(p) {
   const ll = [p.coords.latitude, p.coords.longitude], acc = p.coords.accuracy || 50;
   pos = { ll, acc };
   $('#err').hidden = true;
-  if (first) { me.addTo(map); accC.addTo(map); map.setView(ll, 17); first = false; }
-  me.setLatLng(ll); accC.setLatLng(ll).setRadius(acc);
+  if (first) { me.addTo(map); accC.addTo(map); magC.addTo(map); map.setView(ll, 17); first = false; }
+  me.setLatLng(ll); accC.setLatLng(ll).setRadius(acc); magC.setLatLng(ll).setRadius(magR(acc));
   if (follow) map.panTo(ll);
   const good = demo || acc <= 25;
   $('#gps').textContent = demo ? 'Modo prueba' : good ? 'GPS ok' : 'GPS ±' + Math.round(acc) + ' m';
@@ -201,7 +202,7 @@ function draw() {
   layer.clearLayers();
   for (const f of findsNear()) {
     L.marker(f.ll, { icon: L.divIcon({ className: 'lb-icon', html: `<div class="fd fd-${f.type}">${FDEF[f.type].g}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }), title: FDEF[f.type].n })
-      .on('click', () => { const d = pos ? dist(pos.ll, f.ll) : null; if (d != null && d <= FIND_R + Math.min(pos.acc, 25)) pick(f); else toast(`${FDEF[f.type].n}${d != null ? ' · a ' + fmtD(d) : ''}: caminá hasta ahí y se agarra sola`); }).addTo(layer);
+      .on('click', () => { const d = pos ? dist(pos.ll, f.ll) : null; if (d != null && d <= magR(pos.acc)) pick(f); else toast(`${FDEF[f.type].n}${d != null ? ' · a ' + fmtD(d) : ''}: caminá hasta ahí y se agarra sola`); }).addTo(layer);
   }
   const mis = new Set(S.missions.map(m => m.poi));
   for (const [id, v] of Object.entries(S.disc)) {
@@ -560,7 +561,7 @@ function vGcal() {
 /* ---------- descubrir: cada lugar que pisás por primera vez queda en tu colección ---------- */
 const nowHM = () => new Date().toTimeString().slice(0, 5);
 function discover(ll, acc) {
-  if (!S.poi || (acc > 30 && !demo)) return;
+  if (!S.poi || (acc > 50 && !demo)) return;
   const found = [];
   for (const p of S.poi.list) {
     if (S.disc[p.id]) continue;
@@ -953,7 +954,7 @@ function fxLevels() {
 }
 
 /* ---------- hallazgos: cosas que aparecen por la calle y se agarran caminando ---------- */
-const SLOT = 30 * 60e3, CELL = 0.004, FIND_R = 40, FIND_CAP = 25;
+const SLOT = 30 * 60e3, CELL = 0.004, FIND_R = 60, FIND_CAP = 25;
 const FDEF = {
   bolsa: { n: 'Bolsa de vaccoins', g: 'V', w: 50 },
   energia: { n: 'Energía', g: '+', w: 20 },
@@ -974,8 +975,15 @@ function findsNear() {
     const n = 2 + (R() < .4 ? 1 : 0);
     for (let k = 0; k < n; k++) {
       let ll;
-      if (near.length && R() < .6) { const p = near[Math.floor(R() * near.length)]; ll = [p.ll[0] + (R() - .5) * .00025, p.ll[1] + (R() - .5) * .0003]; } // cerca de un negocio: siempre se llega
-      else ll = [(a + R()) * CELL, (b + R()) * CELL];
+      if (near.length) { const p = near[Math.floor(R() * near.length)]; ll = [p.ll[0] + (R() - .5) * .00025, p.ll[1] + (R() - .5) * .0003]; } // siempre al lado de un negocio o plaza: se llega por la vereda
+      else {
+        ll = [(a + R()) * CELL, (b + R()) * CELL];
+        // manzana sin negocios: lo llevamos al lugar más cercano (hasta 400 m) para que se pueda llegar caminando
+        let best = null, bd = 400;
+        if (S.poi) for (const p of S.poi.list) { const d = dist(ll, p.ll); if (d < bd) { bd = d; best = p; } }
+        if (best) ll = [best.ll[0] + (R() - .5) * .00025, best.ll[1] + (R() - .5) * .0003];
+        else if (S.poi && S.poi.list.length) continue; // nada cerca: mejor no poner algo inalcanzable
+      }
       let x = R() * tot, type = 'bolsa';
       for (const [k2, w] of W) { if ((x -= w) < 0) { type = k2; break; } }
       out.push({ id: `${a}:${b}:${slot}:${k}`, ll, type, val: 5 + Math.floor(R() * 11) });
@@ -983,9 +991,11 @@ function findsNear() {
   }
   return out.filter(f => !S.found[f.id]);
 }
+// imán: todo lo que quede dentro del radio se agarra solo, sin tocar nada
+const magR = acc => FIND_R + Math.min(acc || 0, 40);
 function pickFinds(ll, acc) {
-  if (acc > 40 && !demo) return;
-  for (const f of findsNear()) if (dist(ll, f.ll) <= FIND_R + Math.min(acc, 25)) pick(f);
+  if (acc > 80 && !demo) return;
+  for (const f of findsNear()) if (dist(ll, f.ll) <= magR(acc)) pick(f);
 }
 function pick(f) {
   if (S.found[f.id]) return;
