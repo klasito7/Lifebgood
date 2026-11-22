@@ -991,8 +991,17 @@ function findsNear() {
   }
   return out.filter(f => !S.found[f.id]);
 }
-// imán: todo lo que quede dentro del radio se agarra solo, sin tocar nada
-const magR = acc => FIND_R + Math.min(acc || 0, 40);
+// imán: todo lo que quede dentro del radio se agarra solo, sin tocar nada.
+// Crece con la XP de los últimos 7 días: 60 m de base, +5 m cada 200 XP, hasta 120 m.
+const xp7 = () => { let s2 = 0; const d = new Date(); for (let i = 0; i < 7; i++) { s2 += S.xpDay[dayKey(d)] || 0; d.setDate(d.getDate() - 1); } return s2; };
+const magBase = () => FIND_R + Math.min(60, Math.floor(xp7() / 200) * 5);
+const magR = acc => magBase() + Math.min(acc || 0, 40);
+function magCheck() { // avisa cuando el imán crece o se achica
+  const m = magBase();
+  if (S.magLast == null) { S.magLast = m; saveLocal(); return; }
+  if (m > S.magLast) setTimeout(() => { toast(`Tu imán creció: ${m} m`); try { navigator.vibrate && navigator.vibrate(40); } catch (e) { /* nada */ } }, 3500);
+  if (m !== S.magLast) { S.magLast = m; saveLocal(); if (pos) magC.setRadius(magR(pos.acc)); }
+}
 function pickFinds(ll, acc) {
   if (acc > 80 && !demo) return;
   for (const f of findsNear()) if (dist(ll, f.ll) <= magR(acc)) pick(f);
@@ -1175,6 +1184,8 @@ function vFicha() {
   <div class="ficha">${Object.keys(D.ATTR).map(k => `<div class="fat"><span>${D.ATTR[k]}</span><b style="color:${ACOLS[k]}">${atLv(k)}</b></div>`).join('')}</div>
   <p class="mute">Nivel de cada atributo: una base según lo que me contaste (arrancás con Fuerza 3, día 2 de entrenamiento) más lo que vas ganando.</p>
   <div class="row"><span>Fe</span><div class="bar" style="--c:var(--gold)"><i style="width:${fe}%"></i></div><span>${fe}% · ${S.fe.visits || 0} visita${S.fe.visits === 1 ? '' : 's'}</span></div>
+  <div class="row"><span>Imán</span><div class="bar" style="--c:#ffb800"><i style="width:${(magBase() - 60) / 60 * 100}%"></i></div><span>${magBase()} m</span></div>
+  <p class="mute">El imán crece con la XP de los últimos 7 días (${xp7().toLocaleString('es-AR')} XP): +5 m cada 200 XP, de 60 a 120 m.${magBase() < 120 ? ` Te faltan ${(200 - xp7() % 200).toLocaleString('es-AR')} XP para el próximo paso.` : ' ¡Al máximo!'}</p>
   <h3>Cómo me siento hoy</h3>
   <div class="moods">${Object.entries(MOODS).map(([k, n]) => `<button type="button" class="mood" data-mood="${k}" aria-pressed="${S.mood[today()] === +k}" style="--m:${MCOL[k]}"><b>${k}</b><span>${n}</span></button>`).join('')}</div>
   <div class="mweek">${[...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); const v = S.mood[dayKey(d)]; return `<div><i style="height:${v ? v * 8 : 3}px;background:${v ? MCOL[v] : 'rgba(255,255,255,.15)'}"></i><small>${d.toLocaleDateString('es-AR', { weekday: 'narrow' })}</small></div>`; }).join('')}</div>
@@ -1346,7 +1357,7 @@ function set420(on) {
 /* ---------- HUD ---------- */
 function hud() {
   const { L, lo, hi } = lvl(S.xp);
-  fxLevels();
+  fxLevels(); magCheck();
   $('#lv').textContent = L;
   $('#xpb').style.width = ((S.xp - lo) / (hi - lo) * 100) + '%';
   $('#xpt').textContent = `${S.xp} XP · faltan ${hi - S.xp} para nivel ${L + 1}`;
