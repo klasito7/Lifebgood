@@ -336,8 +336,8 @@ function removeTask(id) {
 }
 function cycleTask(id, what) {
   const t = S.tasks.find(x => x.id === id); if (!t || t.st !== 'open') return;
-  if (what === 'a') t.a = nextOf(CYC_A, t.a);
-  else if (t.kind !== 'd') { t.kind = t.kind === 'p' ? 's' : 'p'; t.xp = P.XP[t.kind]; }
+  if (what === 'a') { t.a = nextOf(CYC_A, t.a); t.afix = true; }
+  else if (t.kind !== 'd') { t.kind = t.kind === 'p' ? 's' : 'p'; t.xp = P.XP[t.kind]; t.kfix = true; }
   learn(t.title, t.a, t.kind);
   if (t.src === 'daily') { const d = S.dailies.find(x => x.id === t.did); if (d) d.a = t.a; }
   save(); renderSheet();
@@ -368,7 +368,7 @@ function vAgenda() {
   const td = S.tasks.filter(x => x.date === t && x.st !== 'hidden').sort(byTime);
   const nod = S.tasks.filter(x => !x.date && x.st === 'open');
   const fut = S.tasks.filter(x => x.date > t && x.st !== 'hidden').sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b));
-  const sync = S.gcal.cid ? `<button class="ghost slim" id="gsync2">Sincronizar Google Calendar${S.gcal.last ? ' · ' + ago(S.gcal.last) : ''}</button>` : '';
+  const sync = S.gcal.cid ? `<button class="ghost slim" id="gsync2">Sincronizar Google${S.gcal.last ? ' · ' + ago(S.gcal.last) : ''}</button>${S.gcal.last && S.gcal.lastN === 0 ? '<p class="mute">En tus calendarios y tareas de Google no hay nada de hoy a 7 días. Lo que cargues allá aparece acá al sincronizar.</p>' : ''}` : '';
   const row = x => `<li class="ag ${x.st} k-${x.kind}"><div class="agt">${x.time || '—'}</div><div class="agb"><b>${esc(x.title)}</b><div class="tags">${x.st === 'open'
       ? `<button type="button" class="tag tb k-${x.kind}" data-tkind="${esc(x.id)}">${KN[x.kind]}</button><button type="button" class="tag tb" data-tattr="${esc(x.id)}" style="border-color:${ACOLS[x.a]}">${D.ATTR[x.a]}</button><span class="tag">+${x.xp} XP</span>`
       : `<span class="tag k-${x.kind}">${KN[x.kind]}</span><span class="tag">+${x.got} XP${x.late ? ' (tarde)' : ''}</span>`}${x.src === 'cal' ? `<span class="tag" style="border-color:${esc(x.color || '')}">${esc(x.cal || 'Calendar')}</span>` : x.src === 'gtask' ? `<span class="tag">${x.late ? 'Atrasada · ' : ''}Tasks</span>` : ''}</div></div>${x.st === 'done' ? '<span class="agok">✓</span>' : `<div class="agac"><button class="agdo" data-done="${esc(x.id)}">Hecha</button><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div>`}</li>`;
@@ -455,7 +455,7 @@ async function loadSources(interactive) {
   const old = S.gcal.cals || {}; const cals = {};
   for (const c of cl.items || []) {
     const o = old[c.id] || {};
-    cals[c.id] = { name: c.primary ? 'Mi calendario' : (c.summaryOverride || c.summary || 'Calendario').slice(0, 40), color: c.backgroundColor || '#7d97ff', primary: !!c.primary, on: o.on != null ? o.on : !!c.primary, kind: o.kind || 'auto' };
+    cals[c.id] = { name: c.primary ? 'Mi calendario' : (c.summaryOverride || c.summary || 'Calendario').slice(0, 40), color: c.backgroundColor || '#7d97ff', primary: !!c.primary, on: o.touched ? o.on : (!!c.primary || c.accessRole === 'owner'), touched: !!o.touched, kind: o.kind || 'auto' };
   }
   S.gcal.cals = cals;
   try {
@@ -472,7 +472,7 @@ async function syncCal(interactive) {
   if (syncing || !S.gcal.cid) return;
   syncing = true;
   try {
-    if (!S.gcal.cals || !Object.keys(S.gcal.cals).length || Date.now() - (S.gcal.srcAt || 0) > 864e5) await loadSources(interactive);
+    if (!S.gcal.cals || !Object.keys(S.gcal.cals).length || Date.now() - (S.gcal.srcAt || 0) > 864e5 || (S.gcal.srcV || 0) < 2) { await loadSources(interactive); S.gcal.srcV = 2; }
     const a = new Date(); a.setHours(0, 0, 0, 0); const b = new Date(a); b.setDate(b.getDate() + 8);
     const own = new Set([...S.tasks.filter(x => x.src === 'manual' || x.src === 'daily'), ...S.dailies].map(x => x.gid).filter(Boolean));
     const tasksOn = Object.values(S.gcal.lists || {}).some(l => l.on);
@@ -494,7 +494,7 @@ async function syncCal(interactive) {
         const t = S.tasks.find(x => x.id === id);
         const data = { title: p.title || ev.summary, date, time, kind, a: p.a, xp: P.XP[kind], cal: cal.name, color: cal.color };
         if (!t) S.tasks.push(Object.assign({ id, src: 'cal', gid: ev.id, st: 'open' }, data));
-        else if (t.st === 'open') Object.assign(t, data, p.known ? {} : { kind: t.kind, a: t.a, xp: t.xp });
+        else if (t.st === 'open') Object.assign(t, data, t.kfix ? { kind: t.kind, xp: t.xp } : {}, t.afix ? { a: t.a } : {});
         else if (t.st === 'hidden') Object.assign(t, { date, time });
       }
     }
@@ -502,7 +502,8 @@ async function syncCal(interactive) {
     let nt = 0;
     if (tasksOn) { try { nt = await syncTasks(interactive, taskTime); } catch (e) { S.gcal.tasksErr = gErr(e); } }
     S.gcal.last = Date.now(); save(); renderSheet();
-    if (interactive) toast(`Sincronizado: ${n} evento${n === 1 ? '' : 's'}${tasksOn ? ` y ${nt} tarea${nt === 1 ? '' : 's'}` : ''}`);
+    S.gcal.lastN = n + nt;
+    if (interactive) toast(n + nt ? `Sincronizado: ${n} evento${n === 1 ? '' : 's'}${tasksOn ? ` y ${nt} tarea${nt === 1 ? '' : 's'}` : ''}` : 'Tus calendarios y tareas no tienen nada de hoy a 7 días');
   } catch (e) { if (interactive) toast(gErr(e)); }
   syncing = false;
 }
@@ -527,7 +528,7 @@ async function syncTasks(interactive, taskTime) {
         const t = S.tasks.find(x => x.id === id);
         const data = { title: p.title || k.title, date, time, kind, a: p.a, xp: P.XP[kind], late: !!late, cal: lst.name };
         if (!t) S.tasks.push(Object.assign({ id, src: 'gtask', tid: k.id, lid, st: 'open' }, data));
-        else if (t.st === 'open') Object.assign(t, data, p.known ? {} : { kind: t.kind, a: t.a, xp: t.xp });
+        else if (t.st === 'open') Object.assign(t, data, t.kfix ? { kind: t.kind, xp: t.xp } : {}, t.afix ? { a: t.a } : {});
       }
       page = j.nextPageToken || '';
     } while (page && ++guard < 5);
@@ -1505,7 +1506,7 @@ document.addEventListener('click', async e => {
   if (b.dataset.skin) return setSkin(b.dataset.skin);
   if (b.dataset.done) return completeTask(b.dataset.done);
   if (b.dataset.note) { $('#snack').hidden = true; return askNote(+b.dataset.note); }
-  if (b.dataset.src) { const box = b.dataset.src === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.on = !o.on; save(); renderSheet(); } return; }
+  if (b.dataset.src) { const box = b.dataset.src === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.on = !o.on; o.touched = true; save(); renderSheet(); } return; }
   if (b.dataset.srck) { const box = b.dataset.srck === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.kind = b.dataset.k; save(); renderSheet(); } return; }
   if (b.dataset.act) return startAct(b.dataset.act);
   if (b.dataset.cruz != null) return cruz(b.dataset.cruz);

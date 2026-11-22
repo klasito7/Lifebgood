@@ -33,7 +33,7 @@ Misiones en la vida real sobre el mapa de tu barrio. Cada día aparecen misiones
 - Copia de seguridad (exportar e importar).
 - Skins: Clásica y Hacker (en Stats → Skin).
 - **Tu agenda** (pestaña Misiones): cargás misiones con texto, por ejemplo `1 pasear a Vaca a las 16`. 1 = principal (80 XP), 2 = secundaria (40 XP), 3 = diaria (20 XP, se repite todos los días). Entiende "hoy", "mañana", "el sábado", "24/11", "a las 16", "16:30", "19hs", "de la tarde". El atributo lo deduce de las palabras, y si lo corregís tocando la etiqueta, aprende para la próxima. Las que repetís aparecen como sugerencias. Si la marcás a más de 1 hora del horario, vale la mitad.
-- **Google Calendar y Tasks** (opcional): elegís qué calendarios entran y qué tipo de misión es cada uno (Automático, Principal o Secundaria). Trae eventos y tareas de hoy a 7 días; las tareas atrasadas pasan a hoy y las sin fecha tienen su sección. Al cumplir una tarea en Lifebgood se tacha sola en Google Tasks. Puede agendar en Google lo que cargás en la app.
+- **Google Calendar y Tasks** (opcional): entran todos tus calendarios propios (los feriados y los compartidos, si los prendés), y elegís qué tipo de misión es cada uno (Automático, Principal o Secundaria). Trae eventos y tareas de hoy a 7 días; las tareas atrasadas pasan a hoy y las sin fecha tienen su sección. Al cumplir una tarea en Lifebgood se tacha sola en Google Tasks. Puede agendar en Google lo que cargás en la app.
 - Modo prueba sin GPS: `index.html#demo` (tocás el mapa para moverte; guarda su progreso aparte).
 
 ## Conectar Google Calendar (una sola vez, unos 10 minutos)
