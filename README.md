@@ -34,6 +34,11 @@ Misiones en la vida real sobre el mapa de tu barrio. Cada día aparecen misiones
 - Skins: Clásica y Hacker (en Stats → Skin).
 - **Tu agenda** (pestaña Misiones): cargás misiones con texto, por ejemplo `1 pasear a Vaca a las 16`. 1 = principal (80 XP), 2 = secundaria (40 XP), 3 = diaria (20 XP, se repite todos los días). Entiende "hoy", "mañana", "el sábado", "24/11", "a las 16", "16:30", "19hs", "de la tarde". El atributo lo deduce de las palabras, y si lo corregís tocando la etiqueta, aprende para la próxima. Las que repetís aparecen como sugerencias. Si la marcás a más de 1 hora del horario, vale la mitad.
 - **Google Calendar y Tasks** (opcional): entran todos tus calendarios propios (los feriados y los compartidos, si los prendés), y elegís qué tipo de misión es cada uno (Automático, Principal o Secundaria). Trae eventos y tareas de hoy a 7 días; las tareas atrasadas pasan a hoy y las sin fecha tienen su sección. Al cumplir una tarea en Lifebgood se tacha sola en Google Tasks. Puede agendar en Google lo que cargás en la app.
+- **Más lugares de OpenStreetMap**: además de kioscos, plazas, panaderías, heladerías, verdulerías, cafés e iglesias, hay misiones en supermercados, gimnasios al aire libre, bibliotecas, murales, monumentos, estaciones de tren, canchas de fútbol y caniles.
+- **Juegos del barrio**: al llegar a una plaza o cancha se destraban los **penales** (5 tiros deslizando el dedo), en un súper **la caja** (pasar productos por el lector sin cobrar el separador) y en una iglesia **el vitral** (memotest de 8 pares, +20 de Fe). Uno por lugar por día; dan XP (10 a 70 según las estrellas) y hasta 20 vaccoins para FUNVS. En Stats se pueden practicar sin premio.
+- **Calles de tu barrio**: cuenta cada tramo de calle que caminás por primera vez (a pie). Al caminar el 80% de una calle de tu zona queda conquistada (+25 XP). En Stats ves el porcentaje del barrio y podés pintar en el mapa las calles caminadas.
+- **Para Vaca**: durante el paseo aparecen en el mapa las fuentes de agua y los caniles; el menú del paseo muestra los más cercanos y marca el camino. Llegar a un canil con Vaca da +15 XP (una vez por día por canil).
+- **Más rápido**: se guardan las últimas 6 zonas donde estuviste (casa, oficina…) y abren sin esperar a Overpass; si los lugares tienen más de 3 días se actualizan por detrás. Si un servidor de Overpass no responde, prueba con otros dos.
 - Modo prueba sin GPS: `index.html#demo` (tocás el mapa para moverte; guarda su progreso aparte).
 
 ## Conectar Google Calendar (una sola vez, unos 10 minutos)
@@ -56,6 +61,7 @@ No hay servidor propio. Tu ubicación no se guarda ni se envía: a OpenStreetMap
 - `css/app.css`: estilos.
 - `js/parse.js`: el que entiende las frases de la carga rápida.
 - `js/data.js`: tipos de lugar, textos de misiones, rarezas y atributos. Para sumar misiones nuevas, se edita acá.
+- `js/juegos.js`: los juegos del barrio (penales, la caja y el vitral).
 - `js/app.js`: la lógica del juego.
 
 Mapa: [Leaflet](https://leafletjs.com) + teselas de © OpenStreetMap.

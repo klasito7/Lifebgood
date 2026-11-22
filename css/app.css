@@ -379,3 +379,44 @@ textarea{width:100%;font:16px Rubik,system-ui,sans-serif;color:var(--ink);backgr
 :root[data-m420] .big,:root[data-m420] .qabtn{background:linear-gradient(90deg,#f72585,#7209b7);color:#fff}
 @media(prefers-reduced-motion:reduce){:root[data-m420] *,:root[data-m420] body::before{animation:none!important}}
 
+
+/* lugares nuevos y Vaca */
+.pw{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:2px solid #fff;background:#4fd3ea;font-size:12px;box-shadow:0 2px 0 rgba(0,0,0,.3)}
+.pd.pcan,.poi.pcan{background:#d98a4a;color:#fff}
+.poi.pwat{background:#4fd3ea;color:#03303a}
+:root[data-skin=hacker] .pw{background:#020a04;border-color:var(--cyan);box-shadow:0 0 6px rgba(0,229,255,.7)}
+
+/* juegos del barrio */
+.game{position:fixed;inset:0;z-index:3000;background:var(--cob);display:flex;flex-direction:column;padding:calc(6px + var(--sat)) 14px calc(14px + var(--sab));overflow:auto;overscroll-behavior:contain}
+.game[hidden]{display:none}
+.ghd{display:flex;align-items:center;justify-content:space-between;padding:6px 0 10px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:10px}
+.ghd b{font:700 20px 'Pixelify Sans',monospace}
+#gClose{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;border:2px solid rgba(255,255,255,.35);background:none;color:var(--ink);cursor:pointer}
+.gbody{width:min(420px,100%);margin:0 auto;flex:1;display:flex;flex-direction:column}
+.gint{text-align:center;margin:auto 0;padding:10px 0}
+.gint p{margin:0 0 14px}
+.gico{font-size:64px;line-height:1;margin-bottom:14px}
+.gi-vitral{color:var(--gold);font-family:serif}
+.gstars{font-size:44px;color:var(--gold);letter-spacing:4px;margin-bottom:6px}
+.gprize{font-weight:600;color:var(--mint)}
+.gtop{display:flex;justify-content:space-between;align-items:center;font:700 16px 'Pixelify Sans',monospace;margin-bottom:8px;font-variant-numeric:tabular-nums}
+.gcv{display:block;width:100%;border-radius:14px;border:2px solid #fff;touch-action:none;user-select:none;-webkit-user-select:none}
+.gh{text-align:center;color:var(--mute);font-size:14px;margin:10px 0 0}
+.pd2{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid #fff;margin-left:5px;vertical-align:-2px}
+.pd2.g{background:var(--mint)}.pd2.x{background:var(--coral)}
+.cjtk{font-size:13px;color:var(--mute);min-height:40px;margin:8px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.game .big{touch-action:manipulation}
+.vit{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;background:#1a1410;border-radius:14px;border:3px solid #6b5a3a}
+.vc{aspect-ratio:3/4;border:3px solid #2a2118;border-radius:10px 10px 4px 4px;background:repeating-linear-gradient(135deg,#2c3c94 0 8px,#22307a 8px 16px);cursor:pointer;display:grid;place-items:center;font-size:30px;padding:0;transition:transform .2s,background .2s}
+.vc span{visibility:hidden}
+.vc.up{background:var(--vc);transform:scale(1.03)}
+.vc.up span{visibility:visible;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5))}
+.vc.ok{box-shadow:0 0 0 2px var(--gold),0 0 12px rgba(255,210,63,.6)}
+.glist{list-style:none;margin:0;padding:0}
+.glist li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+.glist li span{display:flex;flex-direction:column}
+.glist small{color:var(--mute);font-size:13px}
+.glist .tag{margin:0}
+:root[data-skin=hacker] .gcv,:root[data-skin=hacker] .vit{border-radius:4px;border-color:var(--mint);box-shadow:0 0 8px rgba(57,255,136,.4)}
+:root[data-skin=hacker] .ghd b,:root[data-skin=hacker] .gtop{font-family:'VT323',monospace;font-size:22px}
+@media(prefers-reduced-motion:reduce){.vc{transition:none}}

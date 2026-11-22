@@ -33,6 +33,40 @@ window.LB_DATA = {
     cafe: { n: 'Café', g: 'C', r: 30, t: [
       ['Pedí un café y quedate 10 minutos sin el celu', 'R'],
       ['Pedí algo de la carta que no conocés', 'U']
+    ]},
+    supermercado: { n: 'Supermercado', g: 'S', r: 45, t: [
+      ['Comprá algo de tu lista de compras', 'R'],
+      ['Encontrá el producto más barato de una góndola', 'U'],
+      ['Preguntale algo a un repositor', 'C']
+    ]},
+    gimnasio: { n: 'Gimnasio al aire libre', pl: 'Gimnasios al aire libre', g: 'G', r: 40, t: [
+      ['Hacé 3 series en una máquina', 'F'],
+      ['Colgate de una barra 20 segundos', 'F'],
+      ['Probá una máquina que nunca usaste', 'F']
+    ]},
+    biblioteca: { n: 'Biblioteca', g: 'B', r: 35, t: [
+      ['Entrá y hojeá un libro al azar', 'U'],
+      ['Preguntá cómo hacerte socio', 'C']
+    ]},
+    mural: { n: 'Mural', pl: 'Murales', g: 'Mu', r: 30, t: [
+      ['Miralo un minuto y elegí tu detalle favorito', 'U'],
+      ['Sacale una foto y averiguá quién lo pintó', 'U']
+    ]},
+    monumento: { n: 'Monumento', g: 'Mo', r: 35, t: [
+      ['Leé la placa y aprendé qué recuerda', 'U'],
+      ['Contale a alguien lo que aprendiste ahí', 'C']
+    ]},
+    estacion: { n: 'Estación de tren', pl: 'Estaciones de tren', g: 'Tr', r: 80, t: [
+      ['Caminá el andén de punta a punta', 'R'],
+      ['Mirá pasar un tren sin sacar el celu', 'R']
+    ]},
+    cancha: { n: 'Cancha', g: 'F', r: 60, t: [
+      ['Mirá 10 minutos de un picado', 'C'],
+      ['Corré 3 veces el largo de la cancha', 'R']
+    ]},
+    canil: { n: 'Canil', pl: 'Caniles', g: 'Ca', r: 50, t: [
+      ['Llevá a Vaca a jugar 10 minutos', 'C'],
+      ['Que Vaca se haga un amigo nuevo', 'C']
     ]}
   },
   RAR: { c: { n: 'Común', xp: 30 }, r: { n: 'Rara', xp: 60 }, e: { n: 'Épica', xp: 120 } },

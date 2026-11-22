@@ -7,7 +7,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 let KEY = 'lifebgood-v1';            // el modo prueba usa otra clave para no mezclar
 const QUERY_R = 1800;                 // radio de búsqueda de lugares (m)
 const DEMO_POS = [-34.6037, -58.3816]; // Obelisco, solo para el modo prueba
-const OVERPASS = 'https://overpass-api.de/api/interpreter';
+// tres servidores de Overpass: si uno está caído o lento, se prueba el siguiente
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 
 /* ---------- utilidades ---------- */
 const dayKey = d => d.toLocaleDateString('sv-SE');
@@ -30,10 +31,10 @@ const blank = () => ({ v: 1, intro: false, xp: 0, at: { F: 0, U: 0, C: 0, R: 0, 
   body: { h: 177, w: [{ d: '2026-11-20', kg: 84 }], tdays: { '2026-11-19': 1 } },
   cloud: { gist: null, last: 0, err: '' },
   vtrain: { tricks: [{ id: 'circuito', n: 'Circuito en el patio' }, { id: 'kong', n: 'Buscar el Kong olfateando' }], ses: [] },
-  heat: {}, act: null, lastAsk: 0, temper: '', mood: {}, album: 'Monte Grande', sumShown: '', upd: 0 });
+  heat: {}, calles: {}, callesOk: {}, games: { played: {}, best: {}, top: {}, n: {} }, act: null, lastAsk: 0, temper: '', mood: {}, album: 'Monte Grande', sumShown: '', upd: 0 });
 let S = blank();
 function load() { S = blank(); try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(blank(), JSON.parse(r)); } catch (e) { /* sin almacenamiento */ } norm(); }
-function norm() { const B = blank(); S.at = Object.assign({}, B.at, S.at); for (const k of ['fe', 'body', 'cloud', 'vtrain', 'heat', 'mood']) S[k] = Object.assign({}, B[k], S[k]); }
+function norm() { const B = blank(); S.at = Object.assign({}, B.at, S.at); for (const k of ['fe', 'body', 'cloud', 'vtrain', 'heat', 'mood', 'calles', 'callesOk', 'games']) S[k] = Object.assign({}, B[k], S[k]); }
 load();
 const saveLocal = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* lleno o bloqueado */ } };
 const save = () => { S.upd = Date.now(); saveLocal(); cloudSoon(); };
@@ -104,9 +105,9 @@ function onPos(p) {
   $('#gps').textContent = demo ? 'Modo prueba' : good ? 'GPS ok' : 'GPS ±' + Math.round(acc) + ' m';
   $('#gps').className = 'chip ' + (good ? 'ok' : 'warn');
   track(ll, acc);
-  discover(ll, acc); pickFinds(ll, acc); churchCheck(ll, acc); nearCheck(); loadWx(); loadVelez(); if (S.walkOn) walkUI();
+  discover(ll, acc); pickFinds(ll, acc); churchCheck(ll, acc); gameCheck(ll, acc); nearCheck(); loadWx(); loadVelez(); if (S.walkOn) walkUI();
   dayCheck();
-  ensurePOIs();
+  ensurePOIs(); calEnsure();
   if (openM && !hold) renderModal();
   if (tab === 'misiones') renderSheet();
 }
@@ -121,45 +122,78 @@ function track(ll, acc) {
     const d = dist(last.ll, ll), dt = Math.max((now - last.t) / 1000, 1);
     if (d < 10) { save(); return; }
     const vehiculo = !demo && d / dt > 2.8; // más de ~10 km/h: tren, bondi o auto, no cuenta
-    if (!vehiculo && d < 1500) { const t = today(); S.km += d / 1000; S.kmDay[t] = (S.kmDay[t] || 0) + d / 1000; walkTrack(ll, d); heatAdd(ll); }
+    if (!vehiculo && d < 1500) { const t = today(); S.km += d / 1000; S.kmDay[t] = (S.kmDay[t] || 0) + d / 1000; walkTrack(ll, d); heatAdd(ll); calTrack(last.ll, ll); }
   }
   last = { ll, t: now };
   save(); hud();
 }
 
 /* ---------- lugares de OpenStreetMap ---------- */
-const classify = t => /^(kiosk|convenience)$/.test(t.shop || '') ? 'kiosco' : t.shop === 'bakery' ? 'panaderia' : t.leisure === 'park' ? 'plaza' : (t.amenity === 'ice_cream' || t.shop === 'ice_cream') ? 'heladeria' : t.shop === 'greengrocer' ? 'verduleria' : t.amenity === 'cafe' ? 'cafe' : t.amenity === 'place_of_worship' ? 'iglesia' : null;
+const classify = t => /^(kiosk|convenience)$/.test(t.shop || '') ? 'kiosco' : t.shop === 'bakery' ? 'panaderia' : t.shop === 'supermarket' ? 'supermercado'
+  : t.leisure === 'dog_park' ? 'canil' : t.leisure === 'fitness_station' ? 'gimnasio' : t.leisure === 'pitch' ? 'cancha' : t.leisure === 'park' ? 'plaza'
+  : (t.amenity === 'ice_cream' || t.shop === 'ice_cream') ? 'heladeria' : t.shop === 'greengrocer' ? 'verduleria' : t.amenity === 'cafe' ? 'cafe'
+  : t.amenity === 'place_of_worship' ? 'iglesia' : t.amenity === 'library' ? 'biblioteca' : t.tourism === 'artwork' ? 'mural' : t.historic ? 'monumento'
+  : t.railway === 'station' ? 'estacion' : t.amenity === 'drinking_water' ? 'agua' : null;
+const POI_V = 3;
+const roundC = ll => [+(Math.round(ll[0] / 0.005) * 0.005).toFixed(3), +(Math.round(ll[1] / 0.005) * 0.005).toFixed(3)];
+
+let opBest = 0;
+async function overpass(q, ms) {
+  let lastErr;
+  for (let k = 0; k < OVERPASS.length; k++) {
+    const i = (opBest + k) % OVERPASS.length, ac = new AbortController(), to = setTimeout(() => ac.abort(), ms || 25000);
+    try {
+      const r = await fetch(OVERPASS[i], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: ac.signal });
+      if (!r.ok) throw new Error('Overpass ' + r.status);
+      const j = await r.json(); opBest = i; return j;
+    } catch (e) { lastErr = e; } finally { clearTimeout(to); }
+  }
+  throw lastErr;
+}
+
+/* zonas guardadas: las últimas 6 zonas donde estuviste (casa, oficina…) abren al toque sin preguntarle a Overpass */
+const ZKEY = () => KEY + '-zonas';
+function zonesGet() { try { return JSON.parse(localStorage.getItem(ZKEY()) || '[]'); } catch (e) { return []; } }
+function zonePut(z) { try { const L0 = zonesGet().filter(x => dist(x.c, z.c) > 300 && x.v === POI_V); L0.unshift(z); localStorage.setItem(ZKEY(), JSON.stringify(L0.slice(0, 6))); } catch (e) { /* lleno */ } }
+const zoneFind = ll => zonesGet().filter(z => z.v === POI_V && dist(z.c, ll) <= 1000).sort((a, b) => dist(a.c, ll) - dist(b.c, ll))[0] || null;
 
 async function fetchPOIs(ll) {
   // se consulta con el punto redondeado (~500 m) para no mandar tu ubicación exacta
-  const c = [+(Math.round(ll[0] / 0.005) * 0.005).toFixed(3), +(Math.round(ll[1] / 0.005) * 0.005).toFixed(3)];
+  const c = roundC(ll);
   const a = `(around:${QUERY_R},${c[0]},${c[1]})`;
-  const q = `[out:json][timeout:25];(nwr["shop"~"^(kiosk|convenience)$"]${a};nwr["shop"="bakery"]${a};nwr["leisure"="park"]${a};nwr["amenity"="ice_cream"]${a};nwr["shop"="ice_cream"]${a};nwr["shop"="greengrocer"]${a};nwr["amenity"="cafe"]${a};nwr["amenity"="place_of_worship"]["religion"="christian"]${a};);out center 600;`;
-  const r = await fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) });
-  if (!r.ok) throw new Error('Overpass ' + r.status);
-  const j = await r.json();
-  const list = [];
+  const q = `[out:json][timeout:30];(nwr["shop"~"^(kiosk|convenience|bakery|ice_cream|greengrocer|supermarket)$"]${a};nwr["leisure"~"^(park|dog_park|fitness_station)$"]${a};nwr["leisure"="pitch"]["sport"~"soccer"]${a};nwr["amenity"~"^(ice_cream|cafe|library)$"]${a};nwr["amenity"="place_of_worship"]["religion"="christian"]${a};nwr["tourism"="artwork"]["artwork_type"~"^(mural|graffiti)$"]${a};nwr["historic"~"^(monument|memorial)$"]${a};nwr["railway"="station"]${a};node["amenity"="drinking_water"]${a};);out center 1500;`;
+  const j = await overpass(q, 30000);
+  const list = [], water = [];
   for (const el of j.elements || []) {
     const tags = el.tags || {}, type = classify(tags);
     const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
     if (lat == null || !type) continue;
-    list.push({ id: el.type[0] + el.id, ll: [lat, lon], type, name: (tags.name || '').slice(0, 60) });
+    const it = { id: el.type[0] + el.id, ll: [lat, lon], type, name: (tags.name || '').slice(0, 60) };
+    (type === 'agua' ? water : list).push(it);
   }
-  S.poi = { c, t: Date.now(), list, v: 2 };
+  S.poi = { c, t: Date.now(), list, water, v: POI_V };
+  zonePut(S.poi);
   save();
 }
 
+let bgFetch = false;
 async function ensurePOIs() {
   if (!pos || fetching) return;
-  const stale = !S.poi || S.poi.v !== 2 || dist(S.poi.c, pos.ll) > 1000 || Date.now() - S.poi.t > 7 * 864e5;
-  if (stale && Date.now() - failAt > 60000) {
+  let far = !S.poi || S.poi.v !== POI_V || dist(S.poi.c, pos.ll) > 1000;
+  if (far) { const z = zoneFind(pos.ll); if (z) { S.poi = z; far = false; save(); } }
+  const old = S.poi && Date.now() - S.poi.t > 3 * 864e5;
+  if (far && Date.now() - failAt > 60000) {
     fetching = true; if (tab === 'misiones') renderSheet();
     try { await fetchPOIs(pos.ll); }
     catch (e) { failAt = Date.now(); toast('No pude cargar los lugares. Pruebo de nuevo en un minuto.'); }
     fetching = false;
+  } else if (old && !bgFetch && Date.now() - failAt > 60000) {
+    // lo guardado se usa ya, y se actualiza por detrás sin hacerte esperar
+    bgFetch = true;
+    fetchPOIs(pos.ll).then(() => { draw(); if (tab === 'misiones') renderSheet(); }).catch(() => { failAt = Date.now(); }).finally(() => { bgFetch = false; });
   }
   if (S.poi && !S.day) gen(false);
-  if (stale && S.poi && pos) { discover(pos.ll, pos.acc); churchCheck(pos.ll, pos.acc); }
+  if (far && S.poi && pos) { discover(pos.ll, pos.acc); churchCheck(pos.ll, pos.acc); }
   draw();
   if (tab === 'misiones') renderSheet();
 }
@@ -205,7 +239,12 @@ function draw() {
       .on('click', () => { const d = pos ? dist(pos.ll, f.ll) : null; if (d != null && d <= magR(pos.acc)) pick(f); else toast(`${FDEF[f.type].n}${d != null ? ' · a ' + fmtD(d) : ''}: caminá hasta ahí y se agarra sola`); }).addTo(layer);
   }
   const mis = new Set(S.missions.map(m => m.poi));
+  if (S.walkOn && S.poi) { // durante el paseo: fuentes de agua y caniles cerca
+    for (const w of (S.poi.water || []).filter(w => pos && dist(pos.ll, w.ll) < 1200)) L.marker(w.ll, { icon: L.divIcon({ className: 'lb-icon', html: '<div class="pw">💧</div>', iconSize: [24, 24], iconAnchor: [12, 12] }), title: 'Fuente de agua', keyboard: false }).addTo(layer);
+    for (const c of S.poi.list.filter(p => p.type === 'canil' && !mis.has(p.id))) L.marker(c.ll, { icon: L.divIcon({ className: 'lb-icon', html: '<div class="pd pcan">Ca</div>', iconSize: [24, 24], iconAnchor: [12, 12] }), title: c.name || 'Canil', keyboard: false }).addTo(layer);
+  }
   for (const [id, v] of Object.entries(S.disc)) {
+    if (S.walkOn && v.type === 'canil') continue;
     if (mis.has(id) || !v.ll) continue;
     L.marker(v.ll, { icon: L.divIcon({ className: 'lb-icon', html: `<div class="pd">${D.TYPES[v.type].g}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }), title: v.name || D.TYPES[v.type].n, keyboard: false }).addTo(layer);
   }
@@ -241,6 +280,7 @@ function renderModal() {
     <div class="rw"><span>+${m.st === 'done' ? m.got || m.xp : xpOf(m)} XP</span><span>${D.ATTR[m.a]}</span></div>
     ${m.st !== 'done' && (sunBonus(m) || xpMult() > 1) ? `<div>${sunBonus(m) ? '<span class="tag nw">x2 por sol</span>' : ''}${xpMult() > 1 ? '<span class="tag nw">x2 día de Vélez</span>' : ''}</div>` : ''}
     ${action}
+    ${GAME_OF[m.type] && ok && !gPlayed(m.poi) ? `<button class="ghost gbtn" data-game="${esc(m.poi)}">Jugar: ${G.INFO[GAME_OF[m.type]].n}</button>` : GAME_OF[m.type] && !gPlayed(m.poi) ? `<p class="mute" style="margin-top:10px">Al llegar se destraba el juego: ${G.INFO[GAME_OF[m.type]].n}.</p>` : ''}
     <a class="lnk" href="https://www.openstreetmap.org/?mlat=${m.ll[0]}&mlon=${m.ll[1]}#map=18/${m.ll[0]}/${m.ll[1]}" target="_blank" rel="noopener">Ver el lugar en OpenStreetMap</a>
     <button class="ghost" id="closeM">Cerrar</button>`;
 }
@@ -678,7 +718,7 @@ function askNote(i) {
     <button class="ghost" id="closeM">${e.note ? 'Cerrar' : 'Saltar'}</button>`;
   $('#modal').hidden = false;
 }
-const LBL = t => t === 'agenda' ? 'Agenda' : t === 'duel' ? 'Duelo' : t === 'vaca' ? 'Vaca' : D.TYPES[t] ? D.TYPES[t].n : '';
+const LBL = t => t === 'juego' ? 'Juego' : t === 'calle' ? 'Calle' : t === 'agenda' ? 'Agenda' : t === 'duel' ? 'Duelo' : t === 'vaca' ? 'Vaca' : D.TYPES[t] ? D.TYPES[t].n : '';
 function vDiario() {
   const items = S.log.map((e, i) => [e, i]).filter(([e]) => e.type !== 'disc' && e.type !== 'find').reverse();
   if (!items.length) return '<h2>Diario</h2><p class="mute">Cuando cumplas una misión, acá queda lo que pasó.</p>';
@@ -828,10 +868,41 @@ function walkTrack(ll, d) { // lo llama track() con cada tramo caminado
   if (!S.walkOn) return;
   S.walkOn.km += d / 1000;
   S.walkOn.path.push(ll); if (S.walkOn.path.length > 2000) S.walkOn.path.splice(1, 1);
+  vacaSpots(ll);
+}
+/* fuentes de agua y caniles de OpenStreetMap para los paseos */
+const guide = L.polyline([], { color: '#d98a4a', weight: 3, dashArray: '2 9', opacity: .9, interactive: false });
+let guideTo = null;
+function vacaSpots(ll) {
+  const w = S.walkOn; if (!w || !S.poi) return;
+  w.seen = w.seen || {};
+  for (const f of S.poi.water || []) if (!w.seen[f.id] && dist(ll, f.ll) <= 30) { w.seen[f.id] = 1; toast('Fuente de agua acá: ¿Vaca tiene sed?'); }
+  for (const c of S.poi.list) {
+    if (c.type !== 'canil' || w.seen[c.id] || dist(ll, c.ll) > D.TYPES.canil.r) continue;
+    w.seen[c.id] = 1;
+    if ((S.vacaCanil || {})[c.id] !== today()) { S.vacaCanil = Object.assign({}, S.vacaCanil, { [c.id]: today() }); const g = grant(15 * xpMult(), 'C', { type: 'vaca', txt: 'Vaca en el canil' + (c.name ? ' ' + c.name : '') }); toast(g.up ? `¡Subiste a nivel ${g.up}!` : `Vaca llegó al canil: +${15 * xpMult()} XP`); }
+  }
+  if (guideTo) { if (dist(ll, guideTo.ll) < 30) { toast('Llegaron: ' + guideTo.n); guideOff(); } else guide.setLatLngs([ll, guideTo.ll]); }
+}
+function guideSet(ll, n) {
+  guideTo = { ll, n }; if (!map.hasLayer(guide)) guide.addTo(map);
+  guide.setLatLngs(pos ? [pos.ll, ll] : [ll]);
+  follow = false; $('#centrar').classList.add('on');
+  map.fitBounds(L.latLngBounds(pos ? [pos.ll, ll] : [ll]).pad(.3), { maxZoom: 18 });
+  toast(`Marqué ${n}${pos ? ' · a ' + fmtD(dist(pos.ll, ll)) : ''}`);
+}
+function guideOff() { guideTo = null; if (map.hasLayer(guide)) map.removeLayer(guide); }
+function vacaNear() {
+  if (!S.poi || !pos) return '';
+  const near = (arr, n) => arr.map(p => ({ ...p, d: dist(pos.ll, p.ll) })).filter(p => p.d < 2500).sort((a, b) => a.d - b.d).slice(0, n);
+  const can = near(S.poi.list.filter(p => p.type === 'canil'), 2), ag = near(S.poi.water || [], 3);
+  if (!can.length && !ag.length) return '<h3>Para Vaca cerca</h3><p class="mute">No hay caniles ni fuentes de agua cargados en OpenStreetMap cerca tuyo.</p>';
+  const it = (p, ico, n) => `<button class="mi" data-vgo="${p.ll[0]},${p.ll[1]}" data-vn="${esc(n)}"><span class="poi ${ico === 'Ca' ? 'pcan' : 'pwat'}">${ico}</span><span class="tx"><b>${esc(n)}</b><small>a ${fmtD(p.d)} · tocá para marcar el camino</small></span></button>`;
+  return `<h3>Para Vaca cerca</h3><ul class="ml">${can.map(p => `<li>${it(p, 'Ca', p.name || 'Canil')}</li>`).join('')}${ag.map(p => `<li>${it(p, '💧', p.name || 'Fuente de agua')}</li>`).join('')}</ul>`;
 }
 function finishWalk(discard) {
   const w = S.walkOn; if (!w) return;
-  S.walkOn = null; keepAwake(false);
+  S.walkOn = null; keepAwake(false); guideOff();
   const min = Math.round((Date.now() - w.start) / 60000);
   if (discard || min < 5) { save(); walkUI(); toast(discard ? 'Paseo descartado' : 'Muy cortito: para contar tiene que durar 5 minutos'); return; }
   saveWalk({ start: w.start, min, km: +w.km.toFixed(2), src: 'gps' });
@@ -871,6 +942,7 @@ function walkMenu() {
   $('#modalBody').innerHTML = `<div class="vaca-big">${vacaSprite()}</div><h2>Paseo con Vaca</h2>
     <p class="mute">Con GPS cuenta minutos y kilómetros, y da más XP. Dejá la app abierta durante el paseo: el celu no apaga la pantalla mientras dura.</p>
     <button class="big" id="walkGo">Empezar paseo</button>
+    ${vacaNear()}
     <h3>¿Ya la sacaste? Cargalo a mano</h3>
     <div class="tags" id="wMins">${[15, 20, 30, 45, 60].map(m => `<button type="button" class="tag tb" data-wmin="${m}" aria-pressed="${m === 30}">${m} min</button>`).join('')}</div>
     <div class="row2" style="margin-top:6px"><label class="mute" for="wHora" style="align-self:center;margin:0">Hora</label><input id="wHora" type="time" value="${now}"><button class="ghost" id="walkManual">Cargar</button></div>
@@ -1228,7 +1300,7 @@ function vAlbum() {
   const sec = k => {
     const all = list.filter(p => p.type === k); if (!all.length) return '';
     const got = all.filter(p => S.disc[p.id]), m = MEDAL(got.length / all.length), miss = all.length - got.length;
-    return `<h3>${D.TYPES[k].n}s <span class="mute" style="font:inherit;font-size:14px">${got.length}/${all.length}</span>${m ? ` <span class="medal-s ${m[0]}">${m[1]}</span>` : ''}</h3>
+    return `<h3>${D.TYPES[k].pl || D.TYPES[k].n + 's'} <span class="mute" style="font:inherit;font-size:14px">${got.length}/${all.length}</span>${m ? ` <span class="medal-s ${m[0]}">${m[1]}</span>` : ''}</h3>
       <div class="stamps">${got.map(p => `<div class="stamp t-${k}"><i>${D.TYPES[k].g}</i><b>${esc(p.name || D.TYPES[k].n + ' sin nombre')}</b><small>${fmtDay(S.disc[p.id].d)}</small></div>`).join('')}${Array.from({ length: Math.min(miss, 8) }, () => '<div class="stamp empty"><i>?</i></div>').join('')}${miss > 8 ? `<div class="stamp empty"><small>+${miss - 8}</small></div>` : ''}</div>`;
   };
   return `<div class="alhd"><div><span class="mute">Álbum de</span><b class="alname">${esc(S.album)}</b></div><button class="ghost slim" id="alRen">Cambiar nombre</button></div>
@@ -1355,6 +1427,160 @@ function set420(on) {
   toast(on ? 'Modo 420 activado' : 'Volviste a la normalidad');
 }
 
+/* ---------- calles: cuánto de tu barrio caminaste (calles de OpenStreetMap) ---------- */
+const CKEY = () => KEY + '-calles', CC = 0.002, STREET_D = 22;
+let CAL = null, calIdx = null, calBusy = false, calFail = 0, calOn = false, calT = 0;
+const calLayer = L.layerGroup();
+function calLoad() { try { CAL = JSON.parse(localStorage.getItem(CKEY()) || 'null'); } catch (e) { CAL = null; } calIndex(); }
+function calIndex() {
+  calIdx = new Map(); if (!CAL) return;
+  CAL.w.forEach((w, wi) => {
+    // las cuadras largas se parten en tramos de ~20 m: pisar una esquina no marca la calle entera
+    w.d = [w.g[0]];
+    for (let i = 1; i < w.g.length; i++) { const a = w.g[i - 1], b = w.g[i], n = Math.max(1, Math.ceil(dist(a, b) / 20)); for (let k = 1; k <= n; k++) w.d.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]); }
+    w.sl = [];
+    for (let s2 = 0; s2 < w.d.length - 1; s2++) {
+      const a = w.d[s2], b = w.d[s2 + 1]; w.sl.push(dist(a, b));
+      for (let y = Math.floor(Math.min(a[0], b[0]) / CC); y <= Math.floor(Math.max(a[0], b[0]) / CC); y++)
+        for (let x = Math.floor(Math.min(a[1], b[1]) / CC); x <= Math.floor(Math.max(a[1], b[1]) / CC); x++) {
+          const k = y + ':' + x; if (!calIdx.has(k)) calIdx.set(k, []); calIdx.get(k).push([wi, s2]);
+        }
+    }
+  });
+}
+async function calFetch(ll) {
+  const c = roundC(ll);
+  const q = `[out:json][timeout:45];way["highway"~"^(primary|secondary|tertiary|residential|living_street|unclassified|pedestrian)$"]["name"](around:1500,${c[0]},${c[1]});out geom;`;
+  const j = await overpass(q, 50000);
+  const w = [];
+  for (const el of j.elements || []) if (el.geometry && el.geometry.length > 1) w.push({ id: el.id, n: ((el.tags || {}).name || '').slice(0, 50), g: el.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]) });
+  CAL = { c, t: Date.now(), w };
+  try { localStorage.setItem(CKEY(), JSON.stringify({ c, t: CAL.t, w })); } catch (e) { /* lleno: queda solo en memoria */ }
+  calIndex();
+}
+function calEnsure() {
+  if (!pos || calBusy || Date.now() - calFail < 5 * 60e3) return;
+  if (!CAL) calLoad();
+  if (CAL && dist(CAL.c, pos.ll) <= 900 && Date.now() - CAL.t < 30 * 864e5) return;
+  calBusy = true;
+  calFetch(pos.ll).then(() => { if (tab === 'stats') renderSheet(); if (calOn) calDraw(); }).catch(() => { calFail = Date.now(); }).finally(() => { calBusy = false; });
+}
+const segD = (p, a, b) => { // distancia en metros de un punto a un tramo de calle
+  const k = Math.cos(toRad(p[0])) * 111320, ax = (a[1] - p[1]) * k, ay = (a[0] - p[0]) * 110540, bx = (b[1] - p[1]) * k, by = (b[0] - p[0]) * 110540;
+  const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+  return Math.hypot(ax + t * dx, ay + t * dy);
+};
+function calMark(p, newly) {
+  const cy = Math.floor(p[0] / CC), cx = Math.floor(p[1] / CC);
+  for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) {
+    for (const [wi, s2] of calIdx.get(y + ':' + x) || []) {
+      const w = CAL.w[wi], m = S.calles[w.id] || (S.calles[w.id] = {});
+      if (m[s2] || segD(p, w.d[s2], w.d[s2 + 1]) > STREET_D) continue;
+      m[s2] = 1; newly.add(w.n);
+    }
+  }
+}
+function calTrack(a, b) { // lo llama track() con cada tramo caminado
+  if (!CAL || !calIdx) return;
+  const n = Math.min(100, Math.ceil(dist(a, b) / 15)), newly = new Set();
+  for (let i = 0; i <= n; i++) calMark([a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n], newly);
+  if (!newly.size) return;
+  for (const name of newly) {
+    if (!name || S.callesOk[name]) continue;
+    let tot = 0, got = 0;
+    for (const w of CAL.w) if (w.n === name) { const m = S.calles[w.id] || {}; w.sl.forEach((l, i) => { tot += l; if (m[i]) got += l; }); }
+    if (tot && got / tot >= .8) { S.callesOk[name] = today(); const g = grant(25 * xpMult(), 'R', { type: 'calle', txt: 'Conquistaste la calle ' + name }); toast(g.up ? `¡Subiste a nivel ${g.up}!` : `Calle conquistada: ${name} (+${25 * xpMult()} XP)`); }
+  }
+  if (calOn && Date.now() - calT > 8000) calDraw();
+}
+function calStats() {
+  if (!CAL) return null;
+  const by = {}; let tot = 0, got = 0;
+  for (const w of CAL.w) { const m = S.calles[w.id] || {}, o = by[w.n] || (by[w.n] = [0, 0]); w.sl.forEach((l, i) => { tot += l; o[0] += l; if (m[i]) { got += l; o[1] += l; } }); }
+  return { tot, got, by };
+}
+const calPct = () => { const c = calStats(); return c && c.tot ? Math.floor(c.got / c.tot * 100) : 0; };
+function calDraw() {
+  calT = Date.now(); calLayer.clearLayers(); if (!CAL) return;
+  for (const w of CAL.w) {
+    const m = S.calles[w.id]; if (!m) continue;
+    const col = S.callesOk[w.n] ? '#ffd23f' : hacker() ? '#00ff66' : '#5fe0b0';
+    let run = null;
+    for (let i = 0; i < w.sl.length; i++) {
+      if (m[i]) { if (!run) run = [w.d[i]]; run.push(w.d[i + 1]); }
+      else if (run) { L.polyline(run, { color: col, weight: 5, opacity: .85, interactive: false }).addTo(calLayer); run = null; }
+    }
+    if (run) L.polyline(run, { color: col, weight: 5, opacity: .85, interactive: false }).addTo(calLayer);
+  }
+}
+function calToggle(on) {
+  calOn = on;
+  if (on) { calDraw(); calLayer.addTo(map); setTab('mapa'); toast('Verde: calles caminadas · amarillo: conquistadas'); }
+  else { map.removeLayer(calLayer); renderSheet(); }
+}
+function vCalles() {
+  const c = calStats();
+  if (!c || !c.tot) return `<h3>Calles de tu barrio</h3><p class="mute">${calBusy ? 'Cargando las calles de tu zona…' : 'Todavía no cargué las calles de tu zona. Se cargan solas con el GPS prendido.'}</p>`;
+  const names = Object.entries(c.by).filter(([n]) => n), ok = names.filter(([n]) => S.callesOk[n]).length;
+  const top = names.filter(([, v]) => v[1] > 0).sort((a, b) => b[1][1] / b[1][0] - a[1][1] / a[1][0]).slice(0, 8);
+  return `<h3>Calles de tu barrio</h3><div class="grid">
+    <div class="st"><span>Barrio caminado</span><b>${Math.floor(c.got / c.tot * 100)}%</b></div>
+    <div class="st"><span>Calles conquistadas</span><b>${ok} de ${names.length}</b></div>
+    <div class="st"><span>Metros de calle distintos</span><b>${fmtKm(c.got / 1000)}</b></div></div>
+    <p class="mute" style="margin-top:8px">Cuenta cada tramo que caminás por primera vez (a pie, no en bondi). Una calle queda conquistada al caminar el 80% de su largo en tu zona: +25 XP.</p>
+    ${top.length ? rows(top.map(([n, v]) => [esc(n), v[1] / v[0], (S.callesOk[n] ? '★ ' : '') + Math.floor(v[1] / v[0] * 100) + '%']), 1, 'var(--mint)') : ''}
+    <button class="ghost" id="calBtn">${calOn ? 'Ocultar calles caminadas' : 'Ver calles caminadas en el mapa'}</button>`;
+}
+
+/* ---------- juegos del barrio: se destraban al llegar al lugar (js/juegos.js) ---------- */
+const G = window.LB_GAMES;
+const GAME_OF = { plaza: 'penales', cancha: 'penales', supermercado: 'caja', iglesia: 'vitral' };
+const GATTR = { penales: 'F', caja: 'U', vitral: 'E' };
+const GXP = [10, 25, 45, 70], GVC = [0, 5, 10, 20];
+const gameOff = {};
+const gPlayed = id => S.games.played[id] === today();
+function gameCheck(ll, acc) {
+  if (!S.poi || (acc > 40 && !demo) || busy() || G.open() || !$('#pop').hidden) return;
+  for (const p of S.poi.list) {
+    const g = GAME_OF[p.type]; if (!g || gPlayed(p.id) || gameOff[p.id] === today()) continue;
+    if (dist(ll, p.ll) <= D.TYPES[p.type].r + Math.min(acc, 30)) {
+      gameOff[p.id] = today();
+      showPop(`<span class="pk">Juego desbloqueado</span><b>${esc(p.name || D.TYPES[p.type].n)}: ${G.INFO[g].n}</b><div class="tags"><button type="button" class="tag tb" data-game="${esc(p.id)}">Jugar</button><button type="button" class="tag tb" data-game="">Ahora no</button></div>`, 30000);
+      try { navigator.vibrate && navigator.vibrate([40, 40, 40]); } catch (e) { /* nada */ }
+      return;
+    }
+  }
+}
+function gBest(g, r) {
+  const b = S.games.best[g], better = b == null || (g === 'vitral' ? r.score < b : r.score > b);
+  if (better) S.games.best[g] = r.score;
+  return better && b != null;
+}
+function playAt(id) {
+  hidePop(); if (!id) return;
+  const p = S.poi && S.poi.list.find(x => x.id === id); if (!p) return;
+  if (gPlayed(id)) { toast('Ya jugaste acá hoy. Mañana se vuelve a destrabar.'); return; }
+  const g = GAME_OF[p.type], nm = p.name || D.TYPES[p.type].n;
+  closeModal();
+  G.play(g, { place: esc(nm), onEnd: r => {
+    S.games.played[p.id] = today(); S.games.n[g] = (S.games.n[g] || 0) + 1; S.games.top[g] = Math.max(S.games.top[g] || 0, r.tier);
+    const rec = gBest(g, r), xp = GXP[r.tier] * xpMult(), vc = GVC[r.tier];
+    if (g === 'vitral') { S.fe.v = Math.min(100, feNow() + 20); S.fe.t = Date.now(); }
+    const gr = grant(xp, GATTR[g], { type: 'juego', game: g, txt: `${G.INFO[g].n} en ${nm}: ${r.title.toLowerCase()}` });
+    if (vc) fxAdd({ id: 'g' + p.id + today(), ty: 'coins', n: vc, why: G.INFO[g].n + ' en ' + nm });
+    draw();
+    return `+${xp} XP de ${D.ATTR[GATTR[g]]}${vc ? ` · +${vc} vaccoins para FUNVS` : ''}${g === 'vitral' ? ' · Fe +20' : ''}${rec ? ' · ¡Récord!' : ''}${gr.up ? ` · ¡Subiste a nivel ${gr.up}!` : ''}`;
+  } });
+}
+function practice(g) {
+  G.play(g, { practice: true, onEnd: r => { const rec = gBest(g, r); save(); return rec ? '¡Récord nuevo! (en práctica no hay premio)' : 'En práctica no hay premio: el premio está en el lugar.'; } });
+}
+const fmtBest = (g, b) => b == null ? 'sin récord' : g === 'penales' ? `récord ${b}/5` : g === 'caja' ? `récord ${b} pts` : `récord ${b} intentos`;
+function vJuegos() {
+  return `<h3>Juegos del barrio</h3><p class="mute">Se destraban al llegar: penales en plazas y canchas, la caja en el súper y el vitral en la iglesia. Uno por lugar por día, y dan XP y vaccoins para FUNVS.</p>
+  <ul class="glist">${Object.keys(G.INFO).map(g => `<li><span><b>${G.INFO[g].n}</b><small>${S.games.n[g] || 0} jugados · ${fmtBest(g, S.games.best[g])}${S.games.top[g] ? ' · ' + '★'.repeat(S.games.top[g]) : ''}</small></span><button class="tag tb" data-prac="${g}">Practicar</button></li>`).join('')}</ul>`;
+}
+
 /* ---------- HUD ---------- */
 function hud() {
   const { L, lo, hi } = lvl(S.xp);
@@ -1424,7 +1650,7 @@ function vStats() {
   const bt = count('type'), br = count('rar');
   const mxt = Math.max(0, ...Object.values(bt));
   const si = streakInfo();
-  const cards = [['Nivel', L], ['XP total', S.xp], ['Km caminados', fmtKm(S.km)], ['Misiones', S.log.filter(x => x.type !== 'disc' && x.type !== 'find').length], ['Hallazgos', S.log.filter(x => x.type === 'find').length], ['Lugares descubiertos', Object.keys(S.disc).length], ['Zonas pisadas', Object.keys(S.cells).length], ['Racha', si.n === 1 ? '1 día' : si.n + ' días'], ['Escudo de racha', si.shieldUsed ? 'Usado' : 'Disponible'], ['De tu agenda', S.log.filter(x => x.type === 'agenda').length], ['Vencidas', S.expired]];
+  const cards = [['Nivel', L], ['XP total', S.xp], ['Km caminados', fmtKm(S.km)], ['Misiones', S.log.filter(x => !/^(disc|find|juego|calle)$/.test(x.type)).length], ['Hallazgos', S.log.filter(x => x.type === 'find').length], ['Lugares descubiertos', Object.keys(S.disc).length], ['Zonas pisadas', Object.keys(S.cells).length], ['Racha', si.n === 1 ? '1 día' : si.n + ' días'], ['Escudo de racha', si.shieldUsed ? 'Usado' : 'Disponible'], ['De tu agenda', S.log.filter(x => x.type === 'agenda').length], ['Vencidas', S.expired]];
   return `<h2>Estadísticas</h2>
   ${vFicha()}
   <div class="btns" style="margin-top:14px"><button class="ghost" id="goRes">Resumen de la semana</button><button class="ghost" id="heatBtn">${heatOn ? 'Ocultar mapa de calor' : 'Mapa de calor del mes'}</button></div>
@@ -1432,6 +1658,8 @@ function vStats() {
   <div class="grid">${cards.map(([k, v]) => `<div class="st"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
   <p class="mute" style="margin-top:8px">El escudo te cubre un día sin XP por semana para que no se corte la racha. Se recarga cada lunes.</p>
   ${vDisc()}
+  ${vCalles()}
+  ${vJuegos()}
   ${vVaca()}
   ${S.vtrain.ses.length ? `<h3>Adiestramiento</h3>${vtStats().map(([n, st, c]) => `<div class="row"><span>${esc(n)}</span><div class="bar" style="--c:var(--gold)"><i style="width:${st / 5 * 100}%"></i></div><span>${'★'.repeat(st)}${'☆'.repeat(5 - st)} · ${c}</span></div>`).join('')}` : ''}
   <button class="ghost" id="vtOpen">Anotar adiestramiento de Vaca</button>
@@ -1473,7 +1701,13 @@ const ACH = [
   ['Maratón perruna', 'Caminá 10 km con Vaca (con GPS)', () => [Math.floor(S.walks.reduce((s, w) => s + (w.km || 0), 0)), 10]],
   ['Rutina perruna', 'Sacá a Vaca 7 días seguidos', () => { let n = 0; const d = new Date(); if (!S.walks.some(w => w.d === dayKey(d))) d.setDate(d.getDate() - 1); while (S.walks.some(w => w.d === dayKey(d))) { n++; d.setDate(d.getDate() - 1); } return [n, 7]; }],
   ['Puntual', 'Cumplí 10 misiones de tu agenda a horario', () => [S.log.filter(x => x.type === 'agenda' && !x.late).length, 10]],
-  ['Lo dije y lo hice', 'Cumplí 5 misiones principales de tu agenda', () => [S.log.filter(x => x.type === 'agenda' && x.kind === 'p').length, 5]]
+  ['Lo dije y lo hice', 'Cumplí 5 misiones principales de tu agenda', () => [S.log.filter(x => x.type === 'agenda' && x.kind === 'p').length, 5]],
+  ['Callejero', 'Conquistá 10 calles', () => [Object.keys(S.callesOk).length, 10]],
+  ['Dueño del barrio', 'Caminá el 25% de las calles de tu zona', () => [calPct(), 25]],
+  ['Jugador del barrio', 'Jugá los 3 juegos en lugares reales', () => [Object.keys(G.INFO).filter(g => S.games.n[g]).length, 3]],
+  ['Goleador', 'Hacé los 5 penales en una plaza o cancha', () => [S.games.top.penales === 3 ? 1 : 0, 1]],
+  ['Cajero del mes', 'Sacá 3 estrellas en la caja del súper', () => [S.games.top.caja === 3 ? 1 : 0, 1]],
+  ['Vitralista', 'Armá el vitral con 3 estrellas en una iglesia', () => [S.games.top.vitral === 3 ? 1 : 0, 1]]
 ];
 function vLogros() {
   const got = ACH.filter(a => { const [v, t] = a[2](); return v >= t; }).length;
@@ -1510,6 +1744,9 @@ document.addEventListener('click', async e => {
   if (b.dataset.srck) { const box = b.dataset.srck === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.kind = b.dataset.k; save(); renderSheet(); } return; }
   if (b.dataset.act) return startAct(b.dataset.act);
   if (b.dataset.cruz != null) return cruz(b.dataset.cruz);
+  if (b.dataset.game != null) return playAt(b.dataset.game);
+  if (b.dataset.prac) return practice(b.dataset.prac);
+  if (b.dataset.vgo) { const [la, lo] = b.dataset.vgo.split(',').map(Number); closeModal(); return guideSet([la, lo], b.dataset.vn || 'el lugar'); }
   if (b.dataset.vt) { hidePop(); return b.dataset.vt === '1' ? vacaTrain() : null; }
   if (b.dataset.vtt) { const k = b.dataset.vtt; vtSel.has(k) ? vtSel.delete(k) : vtSel.add(k); b.setAttribute('aria-pressed', vtSel.has(k)); return; }
   if (b.dataset.vtr) { vtR = +b.dataset.vtr; document.querySelectorAll('[data-vtr]').forEach(x => x.setAttribute('aria-pressed', x === b)); return; }
@@ -1541,6 +1778,7 @@ document.addEventListener('click', async e => {
     case 'clPull': cloudPull(true); break;
     case 'goRes': setTab('resumen'); break;
     case 'heatBtn': heatToggle(!heatOn); break;
+    case 'calBtn': calToggle(!calOn); break;
     case 'vtOpen': vacaTrain(); break;
     case 'vtAdd': { const v = ($('#vtNew').value || '').trim(); if (!v) break; const id = 't' + uid(); S.vtrain.tricks.push({ id, n: v.slice(0, 40) }); save(); vtSel.add(id); const c = document.createElement('button'); c.type = 'button'; c.className = 'tag tb'; c.dataset.vtt = id; c.setAttribute('aria-pressed', 'true'); c.textContent = v; $('#vtT').appendChild(c); $('#vtNew').value = ''; break; }
     case 'vtSave': {
