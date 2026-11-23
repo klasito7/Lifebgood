@@ -223,7 +223,7 @@ function dayCheck() {
   const t = today();
   if (S.found && Object.keys(S.found).length > 200) cleanFinds();
   const old = S.tasks.filter(x => x.date && x.date < t);
-  if (old.length) { S.expired += old.filter(x => x.st === 'open').length; S.tasks = S.tasks.filter(x => !x.date || x.date >= t); save(); }
+  if (old.length) { S.expired += old.filter(x => x.st === 'open' && x.kind !== 'i').length; S.tasks = S.tasks.filter(x => !x.date || x.date >= t); save(); }
   if (S.dailies.length) { const n = S.tasks.length; ensureDailies(); if (S.tasks.length !== n) save(); }
   if (S.day && S.day !== t) {
     S.expired += S.missions.filter(m => m.st !== 'done').length;
@@ -310,7 +310,7 @@ function complete(m) {
 
 /* ---------- agenda: tus propias misiones (carga rápida o Google Calendar) ---------- */
 const P = window.LB_PARSE;
-const KN = { p: 'Principal', s: 'Secundaria', d: 'Diaria' };
+const KN = { p: 'Principal', s: 'Secundaria', d: 'Diaria', i: 'Para ver' };
 const KNUM = { p: 1, s: 2, d: 3 };
 const ACOLS = { F: 'var(--coral)', U: 'var(--blue)', C: 'var(--mint)', R: 'var(--cyan)', E: 'var(--gold)' };
 const CYC_K = ['p', 's', 'd'], CYC_A = ['F', 'U', 'C', 'R', 'E'];
@@ -352,7 +352,7 @@ async function addTask(text, over) {
 
 function completeTask(id, silent) {
   const t = S.tasks.find(x => x.id === id);
-  if (!t || t.st !== 'open' || (t.date && t.date !== today())) return;
+  if (!t || t.st !== 'open' || t.kind === 'i' || (t.date && t.date !== today())) return;
   const before = lvl(S.xp).L, now = new Date();
   const late = !!t.time && Math.abs(now.getHours() * 60 + now.getMinutes() - minsOf(t.time)) > 60;
   const xp = (late ? Math.round(t.xp / 2) : t.xp) * xpMult(), d = today();
@@ -377,7 +377,7 @@ function removeTask(id) {
 function cycleTask(id, what) {
   const t = S.tasks.find(x => x.id === id); if (!t || t.st !== 'open') return;
   if (what === 'a') { t.a = nextOf(CYC_A, t.a); t.afix = true; }
-  else if (t.kind !== 'd') { t.kind = t.kind === 'p' ? 's' : 'p'; t.xp = P.XP[t.kind]; t.kfix = true; }
+  else if (t.kind !== 'd') { t.kind = t.kind === 'p' ? 's' : 'p'; t.xp = XPK(t.kind); t.kfix = true; }
   learn(t.title, t.a, t.kind);
   if (t.src === 'daily') { const d = S.dailies.find(x => x.id === t.did); if (d) d.a = t.a; }
   save(); renderSheet();
@@ -405,14 +405,16 @@ function vSug() {
 }
 function vAgenda() {
   const t = today();
-  const td = S.tasks.filter(x => x.date === t && x.st !== 'hidden').sort(byTime);
-  const nod = S.tasks.filter(x => !x.date && x.st === 'open');
-  const fut = S.tasks.filter(x => x.date > t && x.st !== 'hidden').sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b));
+  const td = S.tasks.filter(x => x.date === t && x.st !== 'hidden' && x.kind !== 'i').sort(byTime);
+  const ver = S.tasks.filter(x => x.kind === 'i' && x.st === 'open' && x.date >= t && x.date <= dayKey(new Date(Date.now() + 864e5))).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b));
+  const nod = S.tasks.filter(x => !x.date && x.st === 'open' && x.kind !== 'i');
+  const fut = S.tasks.filter(x => x.date > t && x.st !== 'hidden' && x.kind !== 'i').sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b));
   const sync = S.gcal.cid ? `<button class="ghost slim" id="gsync2">Sincronizar Google${S.gcal.last ? ' · ' + ago(S.gcal.last) : ''}</button>${S.gcal.last && S.gcal.lastN === 0 ? '<p class="mute">En tus calendarios y tareas de Google no hay nada de hoy a 7 días. Lo que cargues allá aparece acá al sincronizar.</p>' : ''}` : '';
   const row = x => `<li class="ag ${x.st} k-${x.kind}"><div class="agt">${x.time || '—'}</div><div class="agb"><b>${esc(x.title)}</b><div class="tags">${x.st === 'open'
       ? `<button type="button" class="tag tb k-${x.kind}" data-tkind="${esc(x.id)}">${KN[x.kind]}</button><button type="button" class="tag tb" data-tattr="${esc(x.id)}" style="border-color:${ACOLS[x.a]}">${D.ATTR[x.a]}</button><span class="tag">+${x.xp} XP</span>`
       : `<span class="tag k-${x.kind}">${KN[x.kind]}</span><span class="tag">+${x.got} XP${x.late ? ' (tarde)' : ''}</span>`}${x.src === 'cal' ? `<span class="tag" style="border-color:${esc(x.color || '')}">${esc(x.cal || 'Calendar')}</span>` : x.src === 'gtask' ? `<span class="tag">${x.late ? 'Atrasada · ' : ''}Tasks</span>` : ''}</div></div>${x.st === 'done' ? '<span class="agok">✓</span>' : `<div class="agac"><button class="agdo" data-done="${esc(x.id)}">Hecha</button><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div>`}</li>`;
   return sync + (td.length ? `<ul class="agl">${td.map(row).join('')}</ul>` : '<p class="mute">Nada cargado para hoy. Escribí arriba tu primera misión.</p>')
+    + (ver.length ? `<h3>Para ver</h3><ul class="agl">${ver.map(x => `<li class="ag k-i"><div class="agt">${x.date === t ? (x.time || 'Hoy') : 'Mañ.'}<small>${x.date === t ? '' : (x.time || '')}</small></div><div class="agb"><b>${esc(x.title)}</b><div class="tags"><span class="tag" style="border-color:${esc(x.color || '')}">${esc(x.cal || 'Calendar')}</span></div></div><div class="agac"><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div></li>`).join('')}</ul>` : '')
     + (nod.length ? `<h3>Tareas sin fecha</h3><ul class="agl">${nod.map(row).join('')}</ul>` : '')
     + (fut.length ? `<h3>Próximos días</h3><ul class="agl">${fut.map(x => `<li class="ag fut k-${x.kind}"><div class="agt">${fmtDay(x.date)}<small>${x.time || ''}</small></div><div class="agb"><b>${esc(x.title)}</b><div class="tags"><span class="tag k-${x.kind}">${KN[x.kind]}</span>${x.src === 'cal' ? `<span class="tag">${esc(x.cal || 'Calendar')}</span>` : x.src === 'gtask' ? '<span class="tag">Tasks</span>' : ''}</div></div><div class="agac"><button class="agx" data-del="${esc(x.id)}" aria-label="Quitar">×</button></div></li>`).join('')}</ul>` : '');
 }
@@ -486,8 +488,12 @@ function gEvent(p) {
   if (p.kind === 'd') ev.recurrence = ['RRULE:FREQ=DAILY'];
   return ev;
 }
-// tipo final: número en el título > lo aprendido > el tipo del calendario o lista > secundaria
-const pickKind = (p, def) => { const k = p.pk || p.known ? p.kind : def && def !== 'auto' ? def : p.kind; return k === 'd' ? 's' : k; };
+const SYNC_DAYS = 30;
+// tipo final: número en el título > calendario "solo aviso" > lo aprendido > el tipo del calendario o lista > secundaria
+const pickKind = (p, def) => { const k = p.pk ? p.kind : def === 'i' ? 'i' : p.known ? p.kind : def && def !== 'auto' ? def : p.kind; return k === 'd' ? 's' : k; };
+const XPK = k => k === 'i' ? 0 : P.XP[k];
+// calendarios que son para ver (tele, streams, deportes, feriados): por defecto, solo aviso
+const VIEW_RX = /tv|tele|stream|deporte|automov|f1|motogp|futbol|fútbol|v[eé]lez|festiv|feriad|cumple|series|pel[ií]cul/i;
 
 /* calendarios y listas de tareas que existen en tu cuenta */
 async function loadSources(interactive) {
@@ -495,7 +501,8 @@ async function loadSources(interactive) {
   const old = S.gcal.cals || {}; const cals = {};
   for (const c of cl.items || []) {
     const o = old[c.id] || {};
-    cals[c.id] = { name: c.primary ? 'Mi calendario' : (c.summaryOverride || c.summary || 'Calendario').slice(0, 40), color: c.backgroundColor || '#7d97ff', primary: !!c.primary, on: o.touched ? o.on : (!!c.primary || c.accessRole === 'owner'), touched: !!o.touched, kind: o.kind || 'auto' };
+    const nm = (c.summaryOverride || c.summary || '');
+    cals[c.id] = { name: c.primary ? 'Mi calendario' : (nm || 'Calendario').slice(0, 40), color: c.backgroundColor || '#7d97ff', primary: !!c.primary, on: o.touched ? o.on : (!!c.primary || c.accessRole === 'owner'), touched: !!o.touched, ktouched: !!o.ktouched, kind: o.ktouched ? o.kind : (!c.primary && VIEW_RX.test(nm) ? 'i' : (o.kind && o.kind !== 'i' ? o.kind : 'auto')) };
   }
   S.gcal.cals = cals;
   try {
@@ -512,8 +519,8 @@ async function syncCal(interactive) {
   if (syncing || !S.gcal.cid) return;
   syncing = true;
   try {
-    if (!S.gcal.cals || !Object.keys(S.gcal.cals).length || Date.now() - (S.gcal.srcAt || 0) > 864e5 || (S.gcal.srcV || 0) < 2) { await loadSources(interactive); S.gcal.srcV = 2; }
-    const a = new Date(); a.setHours(0, 0, 0, 0); const b = new Date(a); b.setDate(b.getDate() + 8);
+    if (!S.gcal.cals || !Object.keys(S.gcal.cals).length || Date.now() - (S.gcal.srcAt || 0) > 864e5 || (S.gcal.srcV || 0) < 3) { await loadSources(interactive); S.gcal.srcV = 3; }
+    const a = new Date(); a.setHours(0, 0, 0, 0); const b = new Date(a); b.setDate(b.getDate() + SYNC_DAYS + 1);
     const own = new Set([...S.tasks.filter(x => x.src === 'manual' || x.src === 'daily'), ...S.dailies].map(x => x.gid).filter(Boolean));
     const tasksOn = Object.values(S.gcal.lists || {}).some(l => l.on);
     const taskTime = {}; // tareas de Google que el calendario muestra con hora: la hora se la pasamos a la tarea
@@ -532,7 +539,7 @@ async function syncCal(interactive) {
         if (seen.has(id)) continue;
         seen.add(id); n++;
         const t = S.tasks.find(x => x.id === id);
-        const data = { title: p.title || ev.summary, date, time, kind, a: p.a, xp: P.XP[kind], cal: cal.name, color: cal.color };
+        const data = { title: p.title || ev.summary, date, time, kind, a: p.a, xp: XPK(kind), cal: cal.name, color: cal.color };
         if (!t) S.tasks.push(Object.assign({ id, src: 'cal', gid: ev.id, st: 'open' }, data));
         else if (t.st === 'open') Object.assign(t, data, t.kfix ? { kind: t.kind, xp: t.xp } : {}, t.afix ? { a: t.a } : {});
         else if (t.st === 'hidden') Object.assign(t, { date, time });
@@ -563,10 +570,10 @@ async function syncTasks(interactive, taskTime) {
         const date = !due ? '' : late ? t0 : due;              // las atrasadas pasan a hoy
         const time = due ? (taskTime[P.key(k.title) + '|' + due] || null) : null;
         const p = P.parse(k.title, new Date(), S.learn), kind = pickKind(p, lst.kind), id = 'k:' + k.id;
-        if (due && due > dayKey(new Date(Date.now() + 7 * 864e5))) continue; // más de una semana: todavía no
+        if (due && due > dayKey(new Date(Date.now() + SYNC_DAYS * 864e5))) continue; // más de un mes: todavía no
         seen.add(id); n++;
         const t = S.tasks.find(x => x.id === id);
-        const data = { title: p.title || k.title, date, time, kind, a: p.a, xp: P.XP[kind], late: !!late, cal: lst.name };
+        const data = { title: p.title || k.title, date, time, kind, a: p.a, xp: XPK(kind), late: !!late, cal: lst.name };
         if (!t) S.tasks.push(Object.assign({ id, src: 'gtask', tid: k.id, lid, st: 'open' }, data));
         else if (t.st === 'open') Object.assign(t, data, t.kfix ? { kind: t.kind, xp: t.xp } : {}, t.afix ? { a: t.a } : {});
       }
@@ -584,14 +591,14 @@ async function gtaskDone(t, interactive) {
   save();
 }
 
-const KSEL = [['auto', 'Automático'], ['p', 'Principal'], ['s', 'Secundaria']];
+const KSEL = [['auto', 'Automático'], ['p', 'Principal'], ['s', 'Secundaria'], ['i', 'Solo aviso']];
 function vGcal() {
   if (!S.gcal.cid) return `<h3>Google Calendar y Tasks</h3><p class="mute">Pegá el ID de cliente de tu proyecto de Google Cloud. La guía paso a paso está en el README del repo.</p>
     <div class="row2"><input id="gcid" placeholder="xxxx.apps.googleusercontent.com" aria-label="ID de cliente de Google" autocomplete="off"><button class="ghost" id="gsave">Guardar</button></div>`;
   const cals = Object.entries(S.gcal.cals || {}), lists = Object.entries(S.gcal.lists || {});
   const src = (kind, id, o) => `<div class="src${o.on ? ' on' : ''}"><button type="button" class="srct" data-src="${kind}" data-sid="${esc(id)}" aria-pressed="${o.on}">${o.color ? `<i style="background:${esc(o.color)}"></i>` : ''}<span>${esc(o.name)}</span></button>
     ${o.on ? `<div class="srck">${KSEL.map(([k, n]) => `<button type="button" class="tag tb" data-srck="${kind}" data-sid="${esc(id)}" data-k="${k}" aria-pressed="${o.kind === k}">${n}</button>`).join('')}</div>` : ''}</div>`;
-  return `<h3>Google Calendar y Tasks</h3><p class="mute">${S.gcal.last ? 'Última sincronización: ' + ago(S.gcal.last) + '.' : 'Todavía no sincronizaste.'} Trae eventos y tareas de hoy a 7 días; las tareas sin fecha van aparte.</p>
+  return `<h3>Google Calendar y Tasks</h3><p class="mute">${S.gcal.last ? 'Última sincronización: ' + ago(S.gcal.last) + '.' : 'Todavía no sincronizaste.'} Trae eventos y tareas de hoy a 30 días; las tareas sin fecha van aparte. "Solo aviso" es para lo que vas a ver (tele, partidos, carreras): aparece en tu agenda pero no da XP ni cuenta como vencida.</p>
     <div class="btns"><button class="ghost" id="gsync">Sincronizar ahora</button><button class="ghost" id="gwrite" aria-pressed="${!!S.gcal.write}">Agendar lo que cargo: ${S.gcal.write ? 'Sí' : 'No'}</button></div>
     ${cals.length ? `<p class="mute" style="margin-top:12px"><b>Calendarios.</b> Tocá para elegir cuáles entran. "Automático" usa el número del título (1, 2 o 3) o lo que aprendió; si no, secundaria.</p>${cals.map(([id, o]) => src('cal', id, o)).join('')}` : '<p class="mute" style="margin-top:12px">Tocá Sincronizar para ver tus calendarios y listas de tareas.</p>'}
     ${lists.length ? `<p class="mute" style="margin-top:12px"><b>Listas de Google Tasks.</b> Al cumplir una tarea acá, se tacha sola en Google.</p>${lists.map(([id, o]) => src('list', id, o)).join('')}` : ''}
@@ -1137,7 +1144,7 @@ const busy = () => !$('#modal').hidden || !$('#dialList').hidden;
 /* próxima misión: la de la agenda que viene, o la más cercana del mapa */
 function nextUp() {
   const n = new Date(), mins = n.getHours() * 60 + n.getMinutes();
-  const ag = S.tasks.filter(t => t.date === today() && t.st === 'open' && t.time).map(t => ({ t, dm: minsOf(t.time) - mins })).filter(x => x.dm >= -60 && x.dm <= 120).sort((a, b) => Math.abs(a.dm) - Math.abs(b.dm))[0];
+  const ag = S.tasks.filter(t => t.date === today() && t.st === 'open' && t.time && t.kind !== 'i').map(t => ({ t, dm: minsOf(t.time) - mins })).filter(x => x.dm >= -60 && x.dm <= 120).sort((a, b) => Math.abs(a.dm) - Math.abs(b.dm))[0];
   if (ag) return { kind: 'agenda', title: ag.t.title, sub: ag.dm > 5 ? `Agenda · en ${fmtMin(ag.dm)}` : ag.dm >= -5 ? 'Agenda · ¡es ahora!' : `Agenda · era hace ${fmtMin(-ag.dm)}` };
   if (pos) {
     const m = S.missions.filter(x => x.st === 'open').map(x => ({ x, d: dist(pos.ll, x.ll) })).sort((a, b) => a.d - b.d)[0];
@@ -1740,8 +1747,9 @@ document.addEventListener('click', async e => {
   if (b.dataset.skin) return setSkin(b.dataset.skin);
   if (b.dataset.done) return completeTask(b.dataset.done);
   if (b.dataset.note) { $('#snack').hidden = true; return askNote(+b.dataset.note); }
+  if (b.dataset.gsyncnow) { $('#snack').hidden = true; return syncCal(true); }
   if (b.dataset.src) { const box = b.dataset.src === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.on = !o.on; o.touched = true; save(); renderSheet(); } return; }
-  if (b.dataset.srck) { const box = b.dataset.srck === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.kind = b.dataset.k; save(); renderSheet(); } return; }
+  if (b.dataset.srck) { const box = b.dataset.srck === 'cal' ? S.gcal.cals : S.gcal.lists, o = box && box[b.dataset.sid]; if (o) { o.kind = b.dataset.k; o.ktouched = true; save(); renderSheet(); } return; }
   if (b.dataset.act) return startAct(b.dataset.act);
   if (b.dataset.cruz != null) return cruz(b.dataset.cruz);
   if (b.dataset.game != null) return playAt(b.dataset.game);
@@ -1884,7 +1892,19 @@ try { if (localStorage.getItem('lifebgood-420')) { document.documentElement.data
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 setTimeout(() => { if (cloudOn()) cloudPull(false); else cloudPulled = true; }, 1500);
 setTimeout(() => { showNext(false); setTimeout(() => { maybeAsk(); sundayCheck(); }, 9000); }, 6000);
-if (S.gcal.cid && gTok) syncCal(false);
+// sincroniza sola al abrir y al volver a la app; si venció el permiso, ofrece un toque
+let gAskShown = 0;
+function autoSync() {
+  if (!S.gcal.cid || !navigator.onLine) return;
+  if (Date.now() - (S.gcal.last || 0) < 10 * 60e3) return;
+  if (gTok && gTok.exp > Date.now()) return syncCal(false).catch(() => {});
+  if (Date.now() - gAskShown < 30 * 60e3) return;
+  gAskShown = Date.now();
+  $('#snack').innerHTML = `<span>¿Traigo lo nuevo de tu Google Calendar?</span><button data-gsyncnow="1">Sincronizar</button>`;
+  $('#snack').hidden = false; clearTimeout(snT); snT = setTimeout(() => { $('#snack').hidden = true; }, 9000);
+}
+setTimeout(autoSync, 2500);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(autoSync, 1500); });
 if (location.hash === '#demo') startDemo();
 else if (S.intro) startGPS();
 else $('#intro').hidden = false;
