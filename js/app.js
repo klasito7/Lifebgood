@@ -490,7 +490,7 @@ function gEvent(p) {
 }
 const SYNC_DAYS = 30;
 // tipo final: número en el título > calendario "solo aviso" > lo aprendido > el tipo del calendario o lista > secundaria
-// lo que se carga en Mente trae el tipo de misión elegido (en el evento o en las notas de la tarea)
+// lo que se carga en Myndvs trae el tipo de misión elegido (en el evento o en las notas de la tarea)
 const mkKind = v => /^[psi]$/.test(v || '') ? v : '';
 const pickKind = (p, def) => { const k = p.pk ? p.kind : def === 'i' ? 'i' : p.known ? p.kind : def && def !== 'auto' ? def : p.kind; return k === 'd' ? 's' : k; };
 const XPK = k => k === 'i' ? 0 : P.XP[k];
@@ -1742,7 +1742,7 @@ document.addEventListener('click', async e => {
     const g = b.dataset.go; dial(false);
     if (g === 'walk') return S.walkOn ? toast('Ya hay un paseo en curso: terminalo desde la barra de arriba') : walkMenu();
     if (g === 'doing') return askDoing(true);
-    if (g === 'mente') { location.href = '../Mente/'; return; }
+    if (g === 'myndvs') { location.href = '../myndvs/'; return; }
     if (g === 'nueva') { setTab('misiones'); setTimeout(() => { const i = $('#qaIn'); if (i) i.focus(); }, 50); return; }
     return setTab(tab === g ? 'mapa' : g);
   }
