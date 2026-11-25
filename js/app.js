@@ -490,6 +490,8 @@ function gEvent(p) {
 }
 const SYNC_DAYS = 30;
 // tipo final: número en el título > calendario "solo aviso" > lo aprendido > el tipo del calendario o lista > secundaria
+// lo que se carga en Mente trae el tipo de misión elegido (en el evento o en las notas de la tarea)
+const mkKind = v => /^[psi]$/.test(v || '') ? v : '';
 const pickKind = (p, def) => { const k = p.pk ? p.kind : def === 'i' ? 'i' : p.known ? p.kind : def && def !== 'auto' ? def : p.kind; return k === 'd' ? 's' : k; };
 const XPK = k => k === 'i' ? 0 : P.XP[k];
 // calendarios que son para ver (tele, streams, deportes, feriados): por defecto, solo aviso
@@ -535,7 +537,7 @@ async function syncCal(interactive) {
         const date = st.date || dayKey(new Date(st.dateTime));
         const time = st.dateTime ? new Date(st.dateTime).toTimeString().slice(0, 5) : null;
         if (tasksOn && /tasks\.google\.com\/task\//.test(ev.description || '')) { taskTime[P.key(ev.summary) + '|' + date] = time; continue; }
-        const p = P.parse(ev.summary, new Date(), S.learn), kind = pickKind(p, cal.kind), id = 'g:' + ev.id;
+        const p = P.parse(ev.summary, new Date(), S.learn), kind = mkKind(ev.extendedProperties && ev.extendedProperties.private && ev.extendedProperties.private.lbk) || pickKind(p, cal.kind), id = 'g:' + ev.id;
         if (seen.has(id)) continue;
         seen.add(id); n++;
         const t = S.tasks.find(x => x.id === id);
@@ -569,7 +571,7 @@ async function syncTasks(interactive, taskTime) {
         const late = due && due < t0;
         const date = !due ? '' : late ? t0 : due;              // las atrasadas pasan a hoy
         const time = due ? (taskTime[P.key(k.title) + '|' + due] || null) : null;
-        const p = P.parse(k.title, new Date(), S.learn), kind = pickKind(p, lst.kind), id = 'k:' + k.id;
+        const p = P.parse(k.title, new Date(), S.learn), kind = mkKind(((k.notes || '').match(/\[lb:([psi])\]/) || [])[1]) || pickKind(p, lst.kind), id = 'k:' + k.id;
         if (due && due > dayKey(new Date(Date.now() + SYNC_DAYS * 864e5))) continue; // más de un mes: todavía no
         seen.add(id); n++;
         const t = S.tasks.find(x => x.id === id);
@@ -1740,6 +1742,7 @@ document.addEventListener('click', async e => {
     const g = b.dataset.go; dial(false);
     if (g === 'walk') return S.walkOn ? toast('Ya hay un paseo en curso: terminalo desde la barra de arriba') : walkMenu();
     if (g === 'doing') return askDoing(true);
+    if (g === 'mente') { location.href = '../Mente/'; return; }
     if (g === 'nueva') { setTab('misiones'); setTimeout(() => { const i = $('#qaIn'); if (i) i.focus(); }, 50); return; }
     return setTab(tab === g ? 'mapa' : g);
   }
