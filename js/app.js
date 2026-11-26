@@ -145,7 +145,9 @@ async function overpass(q, ms) {
     try {
       const r = await fetch(OVERPASS[i], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: ac.signal });
       if (!r.ok) throw new Error('Overpass ' + r.status);
-      const j = await r.json(); opBest = i; return j;
+      const j = await r.json();
+      if (j.remark && !(j.elements || []).length) throw new Error('Overpass: ' + String(j.remark).slice(0, 60));
+      opBest = i; return j;
     } catch (e) { lastErr = e; } finally { clearTimeout(to); }
   }
   throw lastErr;
@@ -155,14 +157,14 @@ async function overpass(q, ms) {
 const ZKEY = () => KEY + '-zonas';
 function zonesGet() { try { return JSON.parse(localStorage.getItem(ZKEY()) || '[]'); } catch (e) { return []; } }
 function zonePut(z) { try { const L0 = zonesGet().filter(x => dist(x.c, z.c) > 300 && x.v === POI_V); L0.unshift(z); localStorage.setItem(ZKEY(), JSON.stringify(L0.slice(0, 6))); } catch (e) { /* lleno */ } }
-const zoneFind = ll => zonesGet().filter(z => z.v === POI_V && dist(z.c, ll) <= 1000).sort((a, b) => dist(a.c, ll) - dist(b.c, ll))[0] || null;
+const zoneFind = ll => zonesGet().filter(z => z.v === POI_V && (z.list || []).length && dist(z.c, ll) <= 1000).sort((a, b) => dist(a.c, ll) - dist(b.c, ll))[0] || null;
 
 async function fetchPOIs(ll) {
   // se consulta con el punto redondeado (~500 m) para no mandar tu ubicación exacta
   const c = roundC(ll);
   const a = `(around:${QUERY_R},${c[0]},${c[1]})`;
-  const q = `[out:json][timeout:30];(nwr["shop"~"^(kiosk|convenience|bakery|ice_cream|greengrocer|supermarket)$"]${a};nwr["leisure"~"^(park|dog_park|fitness_station)$"]${a};nwr["leisure"="pitch"]["sport"~"soccer"]${a};nwr["amenity"~"^(ice_cream|cafe|library)$"]${a};nwr["amenity"="place_of_worship"]["religion"="christian"]${a};nwr["tourism"="artwork"]["artwork_type"~"^(mural|graffiti)$"]${a};nwr["historic"~"^(monument|memorial)$"]${a};nwr["railway"="station"]${a};node["amenity"="drinking_water"]${a};);out center 1500;`;
-  const j = await overpass(q, 30000);
+  const q = `[out:json][timeout:60];(nwr["shop"~"^(kiosk|convenience|bakery|ice_cream|greengrocer|supermarket)$"]${a};nwr["leisure"~"^(park|dog_park|fitness_station)$"]${a};nwr["leisure"="pitch"]["sport"~"soccer"]${a};nwr["amenity"~"^(ice_cream|cafe|library)$"]${a};nwr["amenity"="place_of_worship"]["religion"="christian"]${a};nwr["tourism"="artwork"]["artwork_type"~"^(mural|graffiti)$"]${a};nwr["historic"~"^(monument|memorial)$"]${a};nwr["railway"="station"]${a};node["amenity"="drinking_water"]${a};);out center 1500;`;
+  const j = await overpass(q, 65000);
   const list = [], water = [];
   for (const el of j.elements || []) {
     const tags = el.tags || {}, type = classify(tags);
@@ -171,6 +173,7 @@ async function fetchPOIs(ll) {
     const it = { id: el.type[0] + el.id, ll: [lat, lon], type, name: (tags.name || '').slice(0, 60) };
     (type === 'agua' ? water : list).push(it);
   }
+  if (!list.length) throw new Error('sin lugares');
   S.poi = { c, t: Date.now(), list, water, v: POI_V };
   zonePut(S.poi);
   save();
@@ -179,20 +182,20 @@ async function fetchPOIs(ll) {
 let bgFetch = false;
 async function ensurePOIs() {
   if (!pos || fetching) return;
-  let far = !S.poi || S.poi.v !== POI_V || dist(S.poi.c, pos.ll) > 1000;
+  let far = !S.poi || S.poi.v !== POI_V || !(S.poi.list || []).length || dist(S.poi.c, pos.ll) > 1000;
   if (far) { const z = zoneFind(pos.ll); if (z) { S.poi = z; far = false; save(); } }
   const old = S.poi && Date.now() - S.poi.t > 3 * 864e5;
   if (far && Date.now() - failAt > 60000) {
     fetching = true; if (tab === 'misiones') renderSheet();
     try { await fetchPOIs(pos.ll); }
-    catch (e) { failAt = Date.now(); toast('No pude cargar los lugares. Pruebo de nuevo en un minuto.'); }
+    catch (e) { failAt = Date.now(); toast('No pude cargar los lugares del mapa (el servidor de mapas está lento). Pruebo de nuevo en un minuto.'); setTimeout(() => ensurePOIs(), 61000); }
     fetching = false;
   } else if (old && !bgFetch && Date.now() - failAt > 60000) {
     // lo guardado se usa ya, y se actualiza por detrás sin hacerte esperar
     bgFetch = true;
     fetchPOIs(pos.ll).then(() => { draw(); if (tab === 'misiones') renderSheet(); }).catch(() => { failAt = Date.now(); }).finally(() => { bgFetch = false; });
   }
-  if (S.poi && !S.day) gen(false);
+  if (S.poi && (S.poi.list || []).length && (!S.day || (S.day === today() && !S.missions.length))) gen(false);
   if (far && S.poi && pos) { discover(pos.ll, pos.acc); churchCheck(pos.ll, pos.acc); }
   draw();
   if (tab === 'misiones') renderSheet();

@@ -1,5 +1,5 @@
 // Lifebgood sin señal: guarda la app y los mapas que ya viste en el celu.
-const V = 'lb-app-3', TILES = 'lb-tiles';
+const V = 'lb-app-4', TILES = 'lb-tiles';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/data.js', 'js/parse.js', 'js/juegos.js', 'js/app.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
