@@ -540,6 +540,8 @@ async function syncCal(interactive) {
         const date = st.date || dayKey(new Date(st.dateTime));
         const time = st.dateTime ? new Date(st.dateTime).toTimeString().slice(0, 5) : null;
         if (tasksOn && /tasks\.google\.com\/task\//.test(ev.description || '')) { taskTime[P.key(ev.summary) + '|' + date] = time; continue; }
+        // recordatorios de tareas de Myndvs: no son misiones aparte, solo le dan la hora a su tarea
+        if (ev.extendedProperties && ev.extendedProperties.private && ev.extendedProperties.private.mrem) { if (tasksOn) taskTime[P.key(ev.summary.replace(/^⏰\s*/, '')) + '|' + date] = time; continue; }
         const p = P.parse(ev.summary, new Date(), S.learn), kind = mkKind(ev.extendedProperties && ev.extendedProperties.private && ev.extendedProperties.private.lbk) || pickKind(p, cal.kind), id = 'g:' + ev.id;
         if (seen.has(id)) continue;
         seen.add(id); n++;
